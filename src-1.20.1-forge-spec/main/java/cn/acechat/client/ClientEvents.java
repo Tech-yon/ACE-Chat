@@ -30,6 +30,8 @@ public final class ClientEvents {
             return;
         }
         UUID sender = event.getSender();
+        // 聊天栏（T）开着时一律不拦截：回放只在打开瞬间注入一次，吞掉新消息会导致聊天栏「不刷新」
+        boolean chatScreenOpen = minecraft.screen instanceof net.minecraft.client.gui.screens.ChatScreen;
         // 没有 sender / 系统消息 / 命令反馈：属于「其它信息」，由第二个开关控制。
         if (sender == null || event.isSystem() || event.getBoundChatType() == null) {
             // 死亡消息（death.*）在这里解析——与「左下角显示其它信息」开关无关，照样记录
@@ -49,7 +51,7 @@ public final class ClientEvents {
             }
 
             // 顶部 HUD 关掉时一切回归原版：不拦截，系统消息/指令反馈照常进原版聊天
-            if (CommsConfig.hudEnabled.get() && !CommsConfig.vanillaOtherMessages.get()) {
+            if (CommsConfig.hudEnabled.get() && !CommsConfig.vanillaOtherMessages.get() && !chatScreenOpen) {
                 // 与玩家聊天一致：不在左下角显示，但记下来，按 T 打开聊天框时仍能看到
                 VanillaChatReplay.rememberOther(event.getMessage());
                 event.setCanceled(true);
@@ -69,7 +71,8 @@ public final class ClientEvents {
         // 否则联机时某些消息（插件格式化、路由被过滤）会漏到左下角滞留。
         boolean showVanilla = CommsConfig.vanillaPlayerChat.get();
         CommsState.route(minecraft, sender, event.getMessage(), event.getBoundChatType());
-        if (!showVanilla) {
+        // 聊天栏开着时不取消：否则新发言被吞掉，看起来就是「聊天栏不刷新」
+        if (!showVanilla && !chatScreenOpen) {
             event.setCanceled(true);
         }
     }

@@ -351,11 +351,15 @@ public final class CommsConfig {
     public static final String KIND_VITALS = "vitals";
     /** 第三条固定内置：饥饿（生命下面一行，内容与位置由模组负责）。 */
     public static final String KIND_FOOD = "food";
+    /** 第四条固定内置：护甲（饥饿下面一行，渲染与生命/饥饿完全一致）。 */
+    public static final String KIND_ARMOR = "armor";
     public static final String KIND_CUSTOM = "custom";
     /** 生命/饱食度那一行的固定内容。 */
     public static final String VITALS_CONTENT = "生命 %health%/%max_health%";
     /** 饱食度单独一行（与生命拆成两个文字元素）。 */
     public static final String FOOD_CONTENT = "饥饿 %food%/%max_food%";
+    /** 护甲单独一行（与生命/饥饿同规格）。 */
+    public static final String ARMOR_CONTENT = "护甲 %armor%";
     /**
      * v13/v14 时代的「生命 + 饥饿」同一行文案。
      *
@@ -369,6 +373,24 @@ public final class CommsConfig {
     private static final String LEGACY_VITALS_WITH_FOOD = "生命 %health%/%max_health%  饥饿 %food%/%max_food%";
     /** 读不到就算 Unknown（用于别人的护甲/饥饿/延迟等客户端拿不到的数据）。 */
     public static final String UNKNOWN = "Unknown";
+    /**
+     * 文字元素布局的「基准卡片宽度」：在重置位置/首次进入时记录当时的卡片宽度。
+     * 之后的卡片缩放都以它为 1.0 倍基准 —— 这样预设坐标在最开始那个尺寸下是精确的，
+     * 只有当你再改卡片大小/缩放时文字才等比缩放（以前拿 122 当基准，会把 80 宽的卡算成 0.66 倍，导致文字跑位）。
+     */
+    public static int elementBaseWidth;
+
+    /** 元素随卡片缩放的系数（基准尺寸下为 1.0）。 */
+    public static float elementScale(int innerWidth) {
+        int base = elementBaseWidth > 0 ? elementBaseWidth : Math.max(1, portraitWidth.get());
+        if (base <= 0) {
+            return 1.0F;
+        }
+
+        return Math.max(0.6F, Math.min(1.8F, innerWidth / (float) base));
+    }
+
+
 
     /** 元素是否显示（老配置没有这个字段，视为显示）。 */
     public static boolean isVisible(TextElement element) {
@@ -378,12 +400,15 @@ public final class CommsConfig {
     private static TextElement createBuiltIn(String kind) {
         TextElement element;
         if (KIND_NAME.equals(kind)) {
-            element = new TextElement("%player_name%", Horizontal.LEFT, Vertical.BOTTOM, 6, -25, 14, 0xFFD6DEE8, true, 160);
+            element = new TextElement("%player_name%", Horizontal.LEFT, Vertical.TOP, -1, 76, 8, 0xFFD6DEE8, true, 160);
         } else if (KIND_FOOD.equals(kind)) {
             // 第三条固定内置：紧贴「生命」下面一行；字号/颜色/阴影与生命一致
-            element = new TextElement(FOOD_CONTENT, Horizontal.LEFT, Vertical.BOTTOM, 6, -4, 8, 0xFF9AA6B2, false, 160);
+            element = new TextElement(FOOD_CONTENT, Horizontal.LEFT, Vertical.TOP, -2, 100, 6, 0xFF9AA6B2, false, 160);
+        } else if (KIND_ARMOR.equals(kind)) {
+            // 第四条固定内置：紧贴「饥饿」下面一行；字号/颜色/阴影与生命、饥饿完全一致
+            element = new TextElement(ARMOR_CONTENT, Horizontal.LEFT, Vertical.TOP, 40, 92, 6, 0xFF9AA6B2, false, 160);
         } else {
-            element = new TextElement(VITALS_CONTENT, Horizontal.LEFT, Vertical.BOTTOM, 6, -14, 8, 0xFF9AA6B2, false, 160);
+            element = new TextElement(VITALS_CONTENT, Horizontal.LEFT, Vertical.TOP, -2, 100, 6, 0xFF9AA6B2, false, 160);
         }
         element.kind = kind;
         element.visible = Boolean.TRUE;
@@ -399,7 +424,16 @@ public final class CommsConfig {
         }
 
         TextElement created = createBuiltIn(kind);
-        if (KIND_FOOD.equals(kind)) {
+        if (KIND_ARMOR.equals(kind)) {
+            int at = textElements.size();
+            for (int i = 0; i < textElements.size(); i++) {
+                String existing = textElements.get(i).kind;
+                if (KIND_VITALS.equals(existing) || KIND_FOOD.equals(existing)) {
+                    at = i + 1;
+                }
+            }
+            textElements.add(at, created);
+        } else if (KIND_FOOD.equals(kind)) {
             // 饥饿排在「生命」后面，保证列表顺序始终是 玩家名称 / 生命 / 饥饿
             int at = textElements.size();
             for (int i = 0; i < textElements.size(); i++) {
@@ -420,7 +454,7 @@ public final class CommsConfig {
         List<TextElement> result = new ArrayList<>();
         for (TextElement element : textElements) {
             if (!KIND_NAME.equals(element.kind) && !KIND_VITALS.equals(element.kind)
-                    && !KIND_FOOD.equals(element.kind)) {
+                    && !KIND_FOOD.equals(element.kind) && !KIND_ARMOR.equals(element.kind)) {
                 result.add(element);
             }
         }
@@ -433,12 +467,14 @@ public final class CommsConfig {
         TextElement name = null;
         TextElement vitals = null;
         TextElement food = null;
+        TextElement armor = null;
         for (TextElement element : textElements) {
             if (element.kind == null || element.kind.isEmpty()) {
                 // 老配置没有 kind：按内容认领；含 %food% 的按「饥饿」这条固定内置认领
                 element.kind = "%player_name%".equals(element.content) ? KIND_NAME
                         : (element.content != null && element.content.contains("%health%")) ? KIND_VITALS
-                        : (element.content != null && element.content.contains("%food%")) ? KIND_FOOD : KIND_CUSTOM;
+                        : (element.content != null && element.content.contains("%food%")) ? KIND_FOOD
+                        : (element.content != null && element.content.contains("%armor%")) ? KIND_ARMOR : KIND_CUSTOM;
             }
 
             if (element.visible == null) {
@@ -451,6 +487,8 @@ public final class CommsConfig {
                 vitals = element;
             } else if (KIND_FOOD.equals(element.kind) && food == null) {
                 food = element;
+            } else if (KIND_ARMOR.equals(element.kind) && armor == null) {
+                armor = element;
             }
         }
 
@@ -463,7 +501,15 @@ public final class CommsConfig {
         }
 
         if (food == null) {
-            food = createFoodElement(vitals);
+            food = createBuiltIn(KIND_FOOD);
+        }
+
+        if (armor == null) {
+            // 老配置没有护甲：补一条，放在饥饿下面一行（沿用饥饿的样式）
+            armor = createBuiltIn(KIND_ARMOR);
+            if (food != null) {
+                armor.y = food.y + 10;
+            }
         }
 
         // 顺序固定：玩家名称 / 生命 / 饥饿 / 其余自定义元素
@@ -473,8 +519,12 @@ public final class CommsConfig {
         if (food != vitals) {
             ordered.add(food);
         }
+
+        if (armor != food && armor != vitals) {
+            ordered.add(armor);
+        }
         for (TextElement element : textElements) {
-            if (element != name && element != vitals && element != food) {
+            if (element != name && element != vitals && element != food && element != armor) {
                 ordered.add(element);
             }
         }
@@ -890,12 +940,32 @@ public final class CommsConfig {
         // 取不到（离线/未加载/未同步）就显示 Unknown，绝不拿自己的数据冒充别人。
         net.minecraft.world.entity.LivingEntity target = living(mc, playerName, uuid);
         boolean self = target != null && mc.player != null && target.getUUID().equals(mc.player.getUUID());
-        String health = target == null ? UNKNOWN : String.valueOf(Math.round(target.getHealth()));
-        String maxHealth = target == null ? UNKNOWN : String.valueOf(Math.round(target.getMaxHealth()));
-        String food = (self && mc.player != null) ? String.valueOf(mc.player.getFoodData().getFoodLevel()) : UNKNOWN;
-        // 原版饥饿上限固定 20；只有自己会同步饥饿值，其他玩家一律 Unknown
-        String maxFood = (self && mc.player != null) ? "20" : UNKNOWN;
-        String armor = (self && mc.player != null) ? String.valueOf(mc.player.getArmorValue()) : UNKNOWN;
+        // 服务端模块（可选）每秒下发一份数值快照：先读本地缓存，没有就仍然 Unknown
+        java.util.UUID targetId = null;
+        if (uuid != null && !uuid.isBlank()) {
+            try {
+                targetId = java.util.UUID.fromString(uuid.trim());
+            } catch (IllegalArgumentException ignored) {
+                targetId = null;
+            }
+        }
+
+        java.util.OptionalDouble remoteHealth = RemoteStats.health(targetId);
+        java.util.OptionalDouble remoteMaxHealth = RemoteStats.maxHealth(targetId);
+        java.util.OptionalInt remoteFood = RemoteStats.food(targetId);
+        java.util.OptionalInt remoteArmor = RemoteStats.armor(targetId);
+        String health = target != null ? String.valueOf(Math.round(target.getHealth()))
+                : remoteHealth.isPresent() ? String.valueOf(Math.round(remoteHealth.getAsDouble())) : UNKNOWN;
+        String maxHealth = target != null ? String.valueOf(Math.round(target.getMaxHealth()))
+                : remoteMaxHealth.isPresent() ? String.valueOf(Math.round(remoteMaxHealth.getAsDouble())) : UNKNOWN;
+        String food = (self && mc.player != null) ? String.valueOf(mc.player.getFoodData().getFoodLevel())
+                : remoteFood.isPresent() ? String.valueOf(remoteFood.getAsInt()) : UNKNOWN;
+        // 饥饿上限固定 20：自己、或服务端给了数据时都能显示
+        String maxFood = (self && mc.player != null) ? "20"
+                : remoteFood.isPresent() ? "20" : UNKNOWN;
+        String armor = (self && mc.player != null) ? String.valueOf(mc.player.getArmorValue())
+                : target != null ? String.valueOf(target.getArmorValue())
+                : remoteArmor.isPresent() ? String.valueOf(remoteArmor.getAsInt()) : UNKNOWN;
         String ping = pingOf(mc, uuid);
         String dimension = mc.level == null ? "" : mc.level.dimension().location().toString();
         String worldTime = mc.level == null ? "" : (mc.level.getDayTime() % 24000L < 12000L ? "白天" : "夜晚");
@@ -951,7 +1021,8 @@ public final class CommsConfig {
 
     private static JsonObject toJson() {
         JsonObject root = new JsonObject(); root.addProperty("version", 18);
-        JsonObject chat = new JsonObject(); add(chat, "enabled", hudEnabled.get()); add(chat, "centerXOffset", centerXOffset.get()); add(chat, "topYOffset", topYOffset.get()); add(chat, "maxLines", maxLines.get()); add(chat, "boxWidth", boxWidth.get()); add(chat, "backgroundAlpha", backgroundAlpha.get()); add(chat, "lineHoldSeconds", lineHoldSeconds.get()); add(chat, "holdMinSeconds", holdMinSeconds.get()); add(chat, "holdMaxSeconds", holdMaxSeconds.get()); add(chat, "backgroundColor", chatBackgroundColor.get()); add(chat, "nameColor", chatNameColor.get()); add(chat, "rightGap", chatRightGap.get()); add(chat, "leftMargin", chatLeftMargin.get()); add(chat, "nameMaxWidth", chatNameMaxWidth.get()); add(chat, "paddingX", chatPaddingX.get()); add(chat, "paddingY", chatPaddingY.get()); add(chat, "symbolColor", chatSymbolColor.get()); add(chat, "symbolPadding", chatSymbolPadding.get()); add(chat, "borderEnabled", chatBorderEnabled.get()); add(chat, "borderColor", chatBorderColor.get()); add(chat, "borderThickness", chatBorderThickness.get()); root.add("chat", chat);
+        JsonObject chat = new JsonObject(); add(chat, "enabled", hudEnabled.get());
+        chat.addProperty("elementBaseWidth", elementBaseWidth); add(chat, "centerXOffset", centerXOffset.get()); add(chat, "topYOffset", topYOffset.get()); add(chat, "maxLines", maxLines.get()); add(chat, "boxWidth", boxWidth.get()); add(chat, "backgroundAlpha", backgroundAlpha.get()); add(chat, "lineHoldSeconds", lineHoldSeconds.get()); add(chat, "holdMinSeconds", holdMinSeconds.get()); add(chat, "holdMaxSeconds", holdMaxSeconds.get()); add(chat, "backgroundColor", chatBackgroundColor.get()); add(chat, "nameColor", chatNameColor.get()); add(chat, "rightGap", chatRightGap.get()); add(chat, "leftMargin", chatLeftMargin.get()); add(chat, "nameMaxWidth", chatNameMaxWidth.get()); add(chat, "paddingX", chatPaddingX.get()); add(chat, "paddingY", chatPaddingY.get()); add(chat, "symbolColor", chatSymbolColor.get()); add(chat, "symbolPadding", chatSymbolPadding.get()); add(chat, "borderEnabled", chatBorderEnabled.get()); add(chat, "borderColor", chatBorderColor.get()); add(chat, "borderThickness", chatBorderThickness.get()); root.add("chat", chat);
         JsonObject portrait = new JsonObject(); add(portrait, "enabled", portraitEnabled.get()); add(portrait, "width", portraitWidth.get()); add(portrait, "height", portraitHeight.get()); add(portrait, "xOffset", portraitXOffset.get()); add(portrait, "yOffset", portraitYOffset.get()); add(portrait, "scale", portraitScale.get()); add(portrait, "anchor", portraitAnchor.get().name()); add(portrait, "xRatio", portraitXRatio.get()); add(portrait, "yRatio", portraitYRatio.get()); add(portrait, "followChat", portraitFollowChat.get()); add(portrait, "alwaysVisible", portraitAlwaysVisible.get()); add(portrait, "tint", portraitTint.get()); add(portrait, "opacity", portraitOpacity.get()); add(portrait, "brightness", portraitBrightness.get()); add(portrait, "panelColor", portraitPanelColor.get()); add(portrait, "panelAlpha", portraitPanelAlpha.get()); add(portrait, "borderColor", portraitBorderColor.get()); add(portrait, "borderThickness", portraitBorderThickness.get()); add(portrait, "backdropEnabled", portraitBackdropEnabled.get()); add(portrait, "backdropColor", portraitBackdropColor.get()); add(portrait, "backdropAlpha", portraitBackdropAlpha.get()); add(portrait, "backdropPadding", portraitBackdropPadding.get()); add(portrait, "bustScale", portraitBustScale.get()); add(portrait, "photoMode", portraitPhotoMode.get()); add(portrait, "photoHeight", portraitPhotoHeight.get()); add(portrait, "photoDivider", portraitPhotoDivider.get()); add(portrait, "outerLayer", portraitOuterLayer.get()); add(portrait, "filterEnabled", filterEnabled.get()); add(portrait, "filterName", filterName.get()); add(portrait, "filterAlpha", filterAlpha.get()); add(portrait, "filterBlend", filterBlend.get()); add(portrait, "gradeEnabled", gradeEnabled.get()); add(portrait, "gradeBrightness", gradeBrightness.get()); add(portrait, "gradeContrast", gradeContrast.get()); add(portrait, "gradeSaturation", gradeSaturation.get()); add(portrait, "gradeHue", gradeHue.get()); add(portrait, "duotoneEnabled", duotoneEnabled.get()); add(portrait, "duotoneDark", duotoneDark.get()); add(portrait, "duotoneLight", duotoneLight.get()); add(portrait, "duotoneAmount", duotoneAmount.get()); add(portrait, "cape", capeEnabled.get()); root.add("portrait", portrait);
         root.add("filter", array(whitelist.get())); root.add("customPortraits", array(customPortraits.get())); root.add("displayNames", array(displayNames.get())); root.add("customInfo", array(customInfo.get())); root.addProperty("removeFromVanillaChat", removeFromVanillaChat.get()); root.addProperty("vanillaPlayerChat", vanillaPlayerChat.get()); root.addProperty("vanillaOtherMessages", vanillaOtherMessages.get()); root.addProperty("filterMode", filter.get().name()); root.addProperty("blipSound", blipEnabled.get()); root.addProperty("soundVolume", soundVolume.get()); root.addProperty("goneSound", goneSoundEnabled.get()); root.addProperty("newSoundPreset", newSoundPreset.get()); root.addProperty("newSoundVolume", newSoundVolume.get()); root.addProperty("newSoundPitch", newSoundPitch.get()); root.addProperty("newSoundFadeIn", newSoundFadeIn.get()); root.addProperty("newSoundFadeOut", newSoundFadeOut.get()); root.addProperty("newSoundSpeed", newSoundSpeed.get()); root.addProperty("goneSoundPreset", goneSoundPreset.get()); root.addProperty("goneSoundVolume", goneSoundVolume.get()); root.addProperty("goneSoundPitch", goneSoundPitch.get()); root.addProperty("goneSoundFadeIn", goneSoundFadeIn.get()); root.addProperty("goneSoundFadeOut", goneSoundFadeOut.get()); root.addProperty("goneSoundSpeed", goneSoundSpeed.get()); root.addProperty("portraitUseImage", portraitUseImage.get()); root.addProperty("portraitImageName", portraitImageName.get()); root.addProperty("skinOffsetX", skinOffsetX.get()); root.addProperty("skinOffsetY", skinOffsetY.get()); root.addProperty("deathOverlay", deathOverlayEnabled.get()); root.addProperty("chatVisibleLines", chatVisibleLines.get()); root.addProperty("chatScreenLines", chatScreenLines.get()); root.addProperty("previewDragTarget", previewDragTarget.get()); root.addProperty("debugTiming", debugTiming.get()); root.addProperty("activeCard", activeCard.get()); root.addProperty("autoCardByPlayer", autoCardByPlayer.get()); root.addProperty("deathPreset", deathPreset.get()); root.addProperty("deathImageMaxSize", deathImageMaxSize.get()); root.addProperty("deathImageScale", deathImageScale.get()); root.addProperty("deathImageOffsetX", deathImageOffsetX.get()); root.addProperty("deathImageOffsetY", deathImageOffsetY.get()); root.addProperty("portraitImageScale", portraitImageScale.get()); root.addProperty("portraitImageOffsetX", portraitImageOffsetX.get()); root.addProperty("portraitImageOffsetY", portraitImageOffsetY.get());
         JsonArray names = new JsonArray(); nameColors.forEach(n -> names.add(GSON.toJsonTree(n))); root.add("nameColors", names); JsonArray templates = new JsonArray(); filterTemplates.forEach(t -> templates.add(GSON.toJsonTree(t))); root.add("filterTemplates", templates);
@@ -961,7 +1032,14 @@ public final class CommsConfig {
 
     private static void apply(JsonObject root) {
         JsonObject chat = object(root, "chat"); JsonObject portrait = object(root, "portrait");
-        set(chat, "enabled", hudEnabled, JsonElement::getAsBoolean); set(chat, "centerXOffset", centerXOffset, JsonElement::getAsInt); set(chat, "topYOffset", topYOffset, JsonElement::getAsInt); set(chat, "maxLines", maxLines, JsonElement::getAsInt); set(chat, "boxWidth", boxWidth, JsonElement::getAsInt); set(chat, "backgroundAlpha", backgroundAlpha, JsonElement::getAsDouble); set(chat, "lineHoldSeconds", lineHoldSeconds, JsonElement::getAsDouble); set(chat, "holdMinSeconds", holdMinSeconds, JsonElement::getAsDouble); set(chat, "holdMaxSeconds", holdMaxSeconds, JsonElement::getAsDouble); set(chat, "backgroundColor", chatBackgroundColor, JsonElement::getAsInt); set(chat, "nameColor", chatNameColor, JsonElement::getAsInt); set(chat, "rightGap", chatRightGap, JsonElement::getAsInt); set(chat, "leftMargin", chatLeftMargin, JsonElement::getAsInt); set(chat, "nameMaxWidth", chatNameMaxWidth, JsonElement::getAsInt); set(chat, "paddingX", chatPaddingX, JsonElement::getAsInt); set(chat, "paddingY", chatPaddingY, JsonElement::getAsInt); set(chat, "symbolColor", chatSymbolColor, JsonElement::getAsInt); set(chat, "symbolPadding", chatSymbolPadding, JsonElement::getAsInt); set(chat, "borderEnabled", chatBorderEnabled, JsonElement::getAsBoolean); set(chat, "borderColor", chatBorderColor, JsonElement::getAsInt); set(chat, "borderThickness", chatBorderThickness, JsonElement::getAsInt);
+        set(chat, "enabled", hudEnabled, JsonElement::getAsBoolean);
+        if (chat.has("elementBaseWidth")) {
+            try {
+                elementBaseWidth = chat.get("elementBaseWidth").getAsInt();
+            } catch (RuntimeException ignored) {
+                // 老配置没有或非法：保持 0，渲染时退回当前卡片宽度
+            }
+        } set(chat, "centerXOffset", centerXOffset, JsonElement::getAsInt); set(chat, "topYOffset", topYOffset, JsonElement::getAsInt); set(chat, "maxLines", maxLines, JsonElement::getAsInt); set(chat, "boxWidth", boxWidth, JsonElement::getAsInt); set(chat, "backgroundAlpha", backgroundAlpha, JsonElement::getAsDouble); set(chat, "lineHoldSeconds", lineHoldSeconds, JsonElement::getAsDouble); set(chat, "holdMinSeconds", holdMinSeconds, JsonElement::getAsDouble); set(chat, "holdMaxSeconds", holdMaxSeconds, JsonElement::getAsDouble); set(chat, "backgroundColor", chatBackgroundColor, JsonElement::getAsInt); set(chat, "nameColor", chatNameColor, JsonElement::getAsInt); set(chat, "rightGap", chatRightGap, JsonElement::getAsInt); set(chat, "leftMargin", chatLeftMargin, JsonElement::getAsInt); set(chat, "nameMaxWidth", chatNameMaxWidth, JsonElement::getAsInt); set(chat, "paddingX", chatPaddingX, JsonElement::getAsInt); set(chat, "paddingY", chatPaddingY, JsonElement::getAsInt); set(chat, "symbolColor", chatSymbolColor, JsonElement::getAsInt); set(chat, "symbolPadding", chatSymbolPadding, JsonElement::getAsInt); set(chat, "borderEnabled", chatBorderEnabled, JsonElement::getAsBoolean); set(chat, "borderColor", chatBorderColor, JsonElement::getAsInt); set(chat, "borderThickness", chatBorderThickness, JsonElement::getAsInt);
         set(portrait, "enabled", portraitEnabled, JsonElement::getAsBoolean); set(portrait, "width", portraitWidth, JsonElement::getAsInt); set(portrait, "height", portraitHeight, JsonElement::getAsInt); set(portrait, "xOffset", portraitXOffset, JsonElement::getAsInt); set(portrait, "yOffset", portraitYOffset, JsonElement::getAsInt); set(portrait, "scale", portraitScale, JsonElement::getAsDouble); setEnum(portrait, "anchor", portraitAnchor, Anchor.class); set(portrait, "xRatio", portraitXRatio, JsonElement::getAsDouble); set(portrait, "yRatio", portraitYRatio, JsonElement::getAsDouble); set(portrait, "followChat", portraitFollowChat, JsonElement::getAsBoolean); set(portrait, "alwaysVisible", portraitAlwaysVisible, JsonElement::getAsBoolean); set(portrait, "tint", portraitTint, JsonElement::getAsInt); set(portrait, "opacity", portraitOpacity, JsonElement::getAsInt); set(portrait, "brightness", portraitBrightness, JsonElement::getAsInt); set(portrait, "panelColor", portraitPanelColor, JsonElement::getAsInt); set(portrait, "panelAlpha", portraitPanelAlpha, JsonElement::getAsInt); set(portrait, "borderColor", portraitBorderColor, JsonElement::getAsInt); set(portrait, "borderThickness", portraitBorderThickness, JsonElement::getAsInt); set(portrait, "backdropEnabled", portraitBackdropEnabled, JsonElement::getAsBoolean); set(portrait, "backdropColor", portraitBackdropColor, JsonElement::getAsInt); set(portrait, "backdropAlpha", portraitBackdropAlpha, JsonElement::getAsInt); set(portrait, "backdropPadding", portraitBackdropPadding, JsonElement::getAsInt); set(portrait, "bustScale", portraitBustScale, JsonElement::getAsInt); set(portrait, "photoMode", portraitPhotoMode, JsonElement::getAsInt); set(portrait, "photoHeight", portraitPhotoHeight, JsonElement::getAsInt); set(portrait, "photoDivider", portraitPhotoDivider, JsonElement::getAsBoolean); set(portrait, "outerLayer", portraitOuterLayer, JsonElement::getAsBoolean); set(portrait, "filterEnabled", filterEnabled, JsonElement::getAsBoolean); set(portrait, "filterName", filterName, JsonElement::getAsString); set(portrait, "filterAlpha", filterAlpha, JsonElement::getAsInt); set(portrait, "filterBlend", filterBlend, JsonElement::getAsInt); set(portrait, "gradeEnabled", gradeEnabled, JsonElement::getAsBoolean); set(portrait, "gradeBrightness", gradeBrightness, JsonElement::getAsInt); set(portrait, "gradeContrast", gradeContrast, JsonElement::getAsInt); set(portrait, "gradeSaturation", gradeSaturation, JsonElement::getAsInt); set(portrait, "gradeHue", gradeHue, JsonElement::getAsInt); set(portrait, "duotoneEnabled", duotoneEnabled, JsonElement::getAsBoolean); set(portrait, "duotoneDark", duotoneDark, JsonElement::getAsInt); set(portrait, "duotoneLight", duotoneLight, JsonElement::getAsInt); set(portrait, "duotoneAmount", duotoneAmount, JsonElement::getAsInt); set(portrait, "cape", capeEnabled, JsonElement::getAsBoolean);
         set(root, "removeFromVanillaChat", removeFromVanillaChat, JsonElement::getAsBoolean); set(root, "vanillaPlayerChat", vanillaPlayerChat, JsonElement::getAsBoolean); set(root, "vanillaOtherMessages", vanillaOtherMessages, JsonElement::getAsBoolean); setEnum(root, "filterMode", filter, ChatFilter.class); set(root, "blipSound", blipEnabled, JsonElement::getAsBoolean); set(root, "soundVolume", soundVolume, JsonElement::getAsDouble); set(root, "goneSound", goneSoundEnabled, JsonElement::getAsBoolean); set(root, "newSoundPreset", newSoundPreset, JsonElement::getAsString); set(root, "newSoundVolume", newSoundVolume, JsonElement::getAsInt); set(root, "newSoundPitch", newSoundPitch, JsonElement::getAsInt); set(root, "newSoundFadeIn", newSoundFadeIn, JsonElement::getAsInt); set(root, "newSoundFadeOut", newSoundFadeOut, JsonElement::getAsInt); set(root, "newSoundSpeed", newSoundSpeed, JsonElement::getAsInt); set(root, "goneSoundPreset", goneSoundPreset, JsonElement::getAsString); set(root, "goneSoundVolume", goneSoundVolume, JsonElement::getAsInt); set(root, "goneSoundPitch", goneSoundPitch, JsonElement::getAsInt); set(root, "goneSoundFadeIn", goneSoundFadeIn, JsonElement::getAsInt); set(root, "goneSoundFadeOut", goneSoundFadeOut, JsonElement::getAsInt); set(root, "goneSoundSpeed", goneSoundSpeed, JsonElement::getAsInt); set(root, "portraitUseImage", portraitUseImage, JsonElement::getAsBoolean); set(root, "portraitImageName", portraitImageName, JsonElement::getAsString); set(root, "skinOffsetX", skinOffsetX, JsonElement::getAsInt); set(root, "skinOffsetY", skinOffsetY, JsonElement::getAsInt); set(root, "deathOverlay", deathOverlayEnabled, JsonElement::getAsBoolean); set(root, "chatVisibleLines", chatVisibleLines, JsonElement::getAsInt); set(root, "chatScreenLines", chatScreenLines, JsonElement::getAsInt); set(root, "previewDragTarget", previewDragTarget, JsonElement::getAsInt); set(root, "debugTiming", debugTiming, JsonElement::getAsBoolean); set(root, "activeCard", activeCard, JsonElement::getAsString); set(root, "autoCardByPlayer", autoCardByPlayer, JsonElement::getAsBoolean); set(root, "deathPreset", deathPreset, JsonElement::getAsString); set(root, "deathImageMaxSize", deathImageMaxSize, JsonElement::getAsInt); set(root, "deathImageScale", deathImageScale, JsonElement::getAsInt); set(root, "deathImageOffsetX", deathImageOffsetX, JsonElement::getAsInt); set(root, "deathImageOffsetY", deathImageOffsetY, JsonElement::getAsInt); set(root, "portraitImageScale", portraitImageScale, JsonElement::getAsInt); set(root, "portraitImageOffsetX", portraitImageOffsetX, JsonElement::getAsInt); set(root, "portraitImageOffsetY", portraitImageOffsetY, JsonElement::getAsInt);
         whitelist.set(readStrings(root, "filter")); customPortraits.set(readStrings(root, "customPortraits")); displayNames.set(readStrings(root, "displayNames")); customInfo.set(readStrings(root, "customInfo"));
@@ -1058,34 +1136,51 @@ public final class CommsConfig {
      * @return 受影响的元素数量
      */
     public static int resetElementPositions() {
+        // 默认布局 = 当前实机调好的那套（照片下方：名字 / 自定义 / 生命+护甲同一行 / 饥饿），包含字号
+        // 记下这次布局所针对的卡片宽度：之后缩放都以它为 1.0 倍
+        elementBaseWidth = Math.max(1, portraitWidth.get());
+
+        // 文字区起点 = 照片底边（那条绿线）+ 内边距 + 4px 间隙，保证四条都在绿线下面
+        int lineTop = Math.max(0, portraitPhotoHeight.get()) + Math.max(2, portraitBackdropPadding.get()) + 20;
+
         int custom = 0;
         for (int i = 0; i < textElements.size(); i++) {
             TextElement element = textElements.get(i);
+            element.horizontal = Horizontal.LEFT;
+            element.vertical = Vertical.TOP;
             if (KIND_NAME.equals(element.kind)) {
-                element.horizontal = Horizontal.LEFT;
-                element.vertical = Vertical.BOTTOM;
-                element.x = -4;
-                element.y = -12;
+                element.x = -1;
+                element.y = lineTop;
+                element.size = 8;
+                element.color = 0xFFD6DEE8;
+                element.shadow = true;
                 element.visible = true;
             } else if (KIND_VITALS.equals(element.kind)) {
-                element.horizontal = Horizontal.LEFT;
-                element.vertical = Vertical.BOTTOM;
-                element.x = -4;
-                element.y = -2;
+                element.x = -2;
+                element.y = lineTop + 16;
+                element.size = 6;
+                element.color = 0xFF9AA6B2;
+                element.shadow = false;
                 element.visible = true;
             } else if (KIND_FOOD.equals(element.kind)) {
-                // 饥饿固定在生命下面一行
-                element.horizontal = Horizontal.LEFT;
-                element.vertical = Vertical.BOTTOM;
-                element.x = -4;
-                element.y = 8;
+                element.x = -2;
+                element.y = lineTop + 24;
+                element.size = 6;
+                element.color = 0xFF9AA6B2;
+                element.shadow = false;
+                element.visible = true;
+            } else if (KIND_ARMOR.equals(element.kind)) {
+                // 护甲与生命同一行（生命左边、护甲右边）
+                element.x = 40;
+                element.y = lineTop + 16;
+                element.size = 6;
+                element.color = 0xFF9AA6B2;
+                element.shadow = false;
                 element.visible = true;
             } else {
-                // 自定义元素：排在三个内置元素下面，从底部往上依次排开
-                element.horizontal = Horizontal.LEFT;
-                element.vertical = Vertical.BOTTOM;
-                element.x = -4;
-                element.y = 18 + custom * 10;
+                // 自定义元素：名字下面一行，再往下依次排
+                element.x = -1;
+                element.y = lineTop + 9 + custom * 8;
                 custom++;
             }
         }

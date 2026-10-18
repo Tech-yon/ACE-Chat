@@ -16,6 +16,7 @@ public final class AceChat {
     public static final String MOD_ID = "acechat";
 
     public AceChat() {
+        cn.acechat.network.AceChatNetwork.register();
         // 每次加载进游戏时，自动在游戏版本目录下生成自定义素材文件夹（sounds / portraits / filters）
         cn.acechat.client.AceChatFolders.ensure();
         IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();

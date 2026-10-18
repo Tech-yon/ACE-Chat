@@ -180,10 +180,22 @@ public final class PlayerCards {
             return names;
         }
 
-        for (net.minecraft.world.entity.player.Player player : minecraft.level.players()) {
-            String name = player.getGameProfile().getName();
-            if (name != null && !name.isEmpty() && !names.contains(name)) {
-                names.add(name);
+        // 优先用连接里的玩家列表（TAB）：任何在线玩家都在里面，不受实体跟踪范围限制；
+        // 没有连接（例如单人刚进世界）时再回退到世界里加载到的实体。
+        if (minecraft.getConnection() != null) {
+            for (var info : minecraft.getConnection().getOnlinePlayers()) {
+                var profile = info.getProfile();
+                if (profile != null && profile.getName() != null && !profile.getName().isEmpty()
+                        && !names.contains(profile.getName())) {
+                    names.add(profile.getName());
+                }
+            }
+        } else if (minecraft.level != null) {
+            for (net.minecraft.world.entity.player.Player player : minecraft.level.players()) {
+                String name = player.getGameProfile().getName();
+                if (name != null && !name.isEmpty() && !names.contains(name)) {
+                    names.add(name);
+                }
             }
         }
 

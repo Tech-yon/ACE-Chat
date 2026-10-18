@@ -199,15 +199,10 @@ public final class CommsConfigScreen extends Screen {
          }
       }
 
-      this.addRenderableWidget(
-         Button.builder(Component.translatable("screen.acechat.back"), b -> this.onClose())
-            .bounds(MARGIN, this.height - 28, 80, ROW_H)
-            .tooltip(Tooltip.create(Component.translatable("config.acechat.navigation.back.tooltip")))
-            .build()
-      );
+      // 只保留「保存并关闭」：底部不再有返回按钮（二级页各自有「返回角色卡/返回上级」）
       this.addRenderableWidget(
          Button.builder(Component.translatable("screen.acechat.save"), b -> this.saveAndClose())
-            .bounds(MARGIN + 86, this.height - 28, 110, ROW_H)
+            .bounds(MARGIN, this.height - 28, 130, ROW_H)
             .tooltip(Tooltip.create(Component.translatable("config.acechat.navigation.save.tooltip")))
             .build()
       );
@@ -839,6 +834,8 @@ public final class CommsConfigScreen extends Screen {
    }
 
    private void previewRows() {
+      // 预览与拖动页：强制显示形象框（不写配置，关闭界面时复位）
+      CommsHud.setPreviewForced(true);
       this.cardBackRow();
       this.rowResetButtons(CommsConfig.Section.PREVIEW);
       this.addRow(1, (x, y, w) -> {
@@ -1185,7 +1182,7 @@ public final class CommsConfigScreen extends Screen {
    }
 
    /**
-    * 文字元素：三个固定内置（玩家名称 / 生命 / 饥饿）只能改「是否显示 / 缩放 / 位置」，
+    * 文字元素：四个固定内置（玩家名称 / 生命 / 饥饿 / 护甲）只能改「是否显示 / 缩放 / 位置」，
     * 自定义元素可以任意增删、编辑内容、复制。生命与饥饿同属「生命 / 饱食度」这一节。
     */
    private void elementsRows() {
@@ -1230,6 +1227,16 @@ public final class CommsConfigScreen extends Screen {
       this.rowElementAlign("config.acechat.elements.vertical", food, false);
       this.rowElementSlider("config.acechat.elements.x", -300, 300, food, e -> e.x, (e, v) -> e.x = v);
       this.rowElementSlider("config.acechat.elements.y", -300, 300, food, e -> e.y, (e, v) -> e.y = v);
+
+      // ---------- 护甲（固定，默认在饥饿下面一行，与前两条同规格） ----------
+      CommsConfig.TextElement armor = CommsConfig.builtIn(CommsConfig.KIND_ARMOR);
+      this.rowLabel("screen.acechat.elements.armor_section");
+      this.rowElementToggle("config.acechat.elements.show", armor);
+      this.rowElementSlider("config.acechat.elements.size", 6, 24, armor, e -> e.size, (e, v) -> e.size = v);
+      this.rowElementAlign("config.acechat.elements.horizontal", armor, true);
+      this.rowElementAlign("config.acechat.elements.vertical", armor, false);
+      this.rowElementSlider("config.acechat.elements.x", -300, 300, armor, e -> e.x, (e, v) -> e.x = v);
+      this.rowElementSlider("config.acechat.elements.y", -300, 300, armor, e -> e.y, (e, v) -> e.y = v);
 
       // ---------- 自定义文字元素 ----------
       this.rowLabel("screen.acechat.elements.custom_section");
@@ -1762,7 +1769,7 @@ public final class CommsConfigScreen extends Screen {
          }
       }
 
-      this.renderBackground(graphics, 0, 0, 0.0F);
+      this.renderBackground(graphics, 0, 0, 0.0F);   // 1.21: Screen#renderBackground 需要 4 个参数
       graphics.drawCenteredString(this.font, this.title, this.width / 2, 8, 0xFFFFFF);
       if (this.pageCount > 1) {
          String pageText = (this.page + 1) + " / " + this.pageCount;
@@ -1842,10 +1849,18 @@ public final class CommsConfigScreen extends Screen {
 
    @Override
    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+      // 先把点击交给按钮/控件：拖动判定区放宽后，若先跑拖动逻辑会把按钮的点击吞掉
+      if (super.mouseClicked(mouseX, mouseY, button)) {
+         return true;
+      }
+
       int dragTarget = CommsConfig.previewDragTarget.get();
+      // 拖动判定区比预览框本身各向外放宽 80px：
+      // 元素被拖到框外（或卡片外）时仍然能一把抓回来，不会出现"点不中、元素就丢了"。
+      final int dragPad = 80;
       if (this.tab == 3 && button == 0 && dragTarget != 0 && this.previewRects != null
-         && mouseX >= this.previewX && mouseX < this.previewX + this.previewW
-         && mouseY >= this.previewY && mouseY < this.previewY + this.previewH) {
+         && mouseX >= this.previewX - dragPad && mouseX < this.previewX + this.previewW + dragPad
+         && mouseY >= this.previewY - dragPad && mouseY < this.previewY + this.previewH + dragPad) {
          // 先看有没有点在某个文字元素上（拖元素改位置，拖右下角改字号）
          // 只在允许「拖文字」时才做这轮判定 —— 否则整卡范围内随手一按就会抓到文字元素
          int[] elementRects = (dragTarget == 2 || dragTarget == 3) ? CommsHud.lastElementRects() : new int[0];
@@ -1999,6 +2014,8 @@ public final class CommsConfigScreen extends Screen {
 
    @Override
    public void onClose() {
+      // 离开配置界面：撤掉预览强制显示，形象框常驻设置保持原样
+      CommsHud.setPreviewForced(false);
       this.saveFields();
       Minecraft.getInstance().setScreen(this.parent);
    }

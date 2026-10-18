@@ -3,6 +3,7 @@ loaderVersion="[47,)"
 license="GPL-3.0-or-later"
 [[mods]]
 modId="acechat"
+displayTest="IGNORE_ALL_VERSION"
 version="${version}"
 displayName="ACE Chat"
 authors="AutoMods"

@@ -26,6 +26,13 @@ import java.util.List;
  *  4) 文字元素支持独立字号，位置按“屏幕比例 + 像素微调”计算，方便在预览里拖动。
  */
 public final class CommsHud {
+    /** 预览与拖动页强制显示形象框：只作用于渲染，不改任何配置；关闭页面即恢复 */
+    private static boolean previewForced;
+
+    public static void setPreviewForced(boolean forced) {
+        previewForced = forced;
+    }
+
    private static final Logger LOGGER = LoggerFactory.getLogger("acechat");
    private static long lastTimingLog;
    /** 文字诊断/报错限流用。 */
@@ -88,8 +95,8 @@ public final class CommsHud {
       CommsState.Entry shown = CommsState.displayed();
       PortraitSource source = portraitOrSelf(minecraft);
       // 「形象框常驻」优先于「跟随聊天栏隐藏」：开了常驻就一直显示（显示自己的形象）
-      boolean showPortrait = CommsConfig.portraitEnabled.get() && source != null
-         && (CommsConfig.portraitAlwaysVisible.get() || !CommsConfig.portraitFollowChat.get() || shown != null);
+      boolean showPortrait = (CommsConfig.portraitEnabled.get() || previewForced) && source != null
+         && (previewForced || CommsConfig.portraitAlwaysVisible.get() || !CommsConfig.portraitFollowChat.get() || shown != null);
       if (shown == null && !showPortrait) {
          return;
       }
@@ -134,7 +141,7 @@ public final class CommsHud {
       int boxWidth = chatEffectiveWidth(areaWidth);
       List<FormattedCharSequence> lines = previewLines(minecraft.font, areaWidth);
       try (ImmediateGui draw = new ImmediateGui(graphics)) {
-         if (CommsConfig.portraitEnabled.get() && source != null) {
+         if ((CommsConfig.portraitEnabled.get() || previewForced) && source != null) {
             int[] rect = portraitRect(areaWidth, areaHeight);
             drawPortrait(draw, graphics, minecraft.font, source, areaX + rect[0], areaY + rect[1], rect[2], rect[3]);
          }
@@ -248,7 +255,7 @@ public final class CommsHud {
    private static PortraitSource portraitOrSelf(Minecraft minecraft) {
       PortraitSource source = CommsState.portrait();
       // 只有开了「形象框常驻」才在自己没发言时顶上自己的形象
-      if (source == null && CommsConfig.portraitAlwaysVisible.get() && minecraft.player != null) {
+      if (source == null && (CommsConfig.portraitAlwaysVisible.get() || previewForced) && minecraft.player != null) {
          source = PortraitSource.resolve(minecraft, minecraft.player.getUUID(), minecraft.player.getGameProfile().getName());
       }
 
@@ -273,7 +280,7 @@ public final class CommsHud {
       int preferred = Math.max(60, CommsConfig.boxWidth.get());
       int margin = Math.max(0, CommsConfig.chatLeftMargin.get());
       int available = areaWidth - margin * 2;
-      if (CommsConfig.portraitEnabled.get()) {
+      if (CommsConfig.portraitEnabled.get() || previewForced) {
          int rightLimit = portraitLeftEdge(areaWidth) - Math.max(0, CommsConfig.chatRightGap.get());
          available = Math.min(available, rightLimit - margin);
       }
@@ -290,7 +297,7 @@ public final class CommsHud {
       int height = lineCount * LINE_HEIGHT + CommsConfig.chatPaddingY.get() * 2;
       int margin = Math.max(0, CommsConfig.chatLeftMargin.get());
       int x = screenWidth / 2 + CommsConfig.centerXOffset.get() - width / 2;
-      if (CommsConfig.portraitEnabled.get()) {
+      if (CommsConfig.portraitEnabled.get() || previewForced) {
          int rightLimit = portraitLeftEdge(screenWidth) - Math.max(0, CommsConfig.chatRightGap.get());
          if (x + width > rightLimit) {
             x = rightLimit - width;
@@ -643,7 +650,7 @@ public final class CommsHud {
          }
 
          String text = resolved;
-         int max = Math.max(1, element.maxWidth);
+         int max = Math.max(1, Math.round(element.maxWidth * CommsConfig.elementScale(width)));
          while (font.width(text) > max && text.length() > 1) {
             text = text.substring(0, text.length() - 1);
          }
@@ -652,19 +659,24 @@ public final class CommsHud {
             text = text + "…";
          }
 
-         float sizeScale = Math.max(0.5F, Math.min(3.0F, element.size / 9.0F));
+         // 跟随形象框整体缩放：卡片被缩放/改大改小之后，文字也跟着放大缩小（元素自身的 size 仍是主导）
+        float cardScale = CommsConfig.elementScale(width);
+        float sizeScale = Math.max(0.4F, Math.min(4.0F, element.size / 9.0F * cardScale));
          int textWidth = Math.round(font.width(text) * sizeScale);
          int textHeight = Math.round(9 * sizeScale);
+         // 位置也随卡片缩放：卡片缩放/改大改小后，元素的偏移量按同一系数缩放
+         int sx = Math.round(element.x * cardScale);
+         int sy = Math.round(element.y * cardScale);
          int tx = switch (element.horizontal) {
-            case LEFT -> x + element.x;
-            case CENTER -> x + (width - textWidth) / 2 + element.x;
-            case RIGHT -> x + width - textWidth + element.x;
+            case LEFT -> x + sx;
+            case CENTER -> x + (width - textWidth) / 2 + sx;
+            case RIGHT -> x + width - textWidth + sx;
          };
          int tinted = applyElementTint(element.color, elementTint());
          int ty = switch (element.vertical) {
-            case TOP -> y + element.y;
-            case CENTER -> y + (height - textHeight) / 2 + element.y;
-            case BOTTOM -> y + height - textHeight + element.y;
+            case TOP -> y + sy;
+            case CENTER -> y + (height - textHeight) / 2 + sy;
+            case BOTTOM -> y + height - textHeight + sy;
          };
          // 记录实际绘制出来的矩形（预览里拖拽/缩放元素要用它）
          rects[index * 4] = tx;

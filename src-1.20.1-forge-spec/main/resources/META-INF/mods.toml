@@ -1,0 +1,23 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="GPL-3.0-or-later"
+[[mods]]
+modId="acechat"
+version="${version}"
+displayName="SPEC-ACE Chat"
+authors="AutoMods"
+description='''顶部居中聊天与 ACE 风格半身像通讯框。'''
+
+[[dependencies.acechat]]
+modId="forge"
+mandatory=true
+versionRange="[47.0,48.0)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.acechat]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.21)"
+ordering="NONE"
+side="BOTH"

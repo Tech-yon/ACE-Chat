@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "pack_format": 34,
+    "supported_formats": [34, 42, 46],
+    "description": "ACE Chat resources (1.21.1)"
+  }
+}

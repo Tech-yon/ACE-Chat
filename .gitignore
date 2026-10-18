@@ -1,0 +1,30 @@
+# ---- 构建产物 ----
+out/
+build/
+classes*/
+stage*/
+*.class
+*.jar
+*.zip
+
+# ---- 游戏运行目录（绝不入库）----
+run/
+logs/
+crash-reports/
+saves/
+ACE_config/
+config/
+mods/
+resourcepacks/
+shaderpacks/
+options.txt
+servers.dat
+
+# ---- IDE / 系统 ----
+.idea/
+*.iml
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
+desktop.ini

@@ -928,7 +928,8 @@ public final class CommsConfig {
         TextElement vitals = createBuiltIn(KIND_VITALS);
         textElements.add(createBuiltIn(KIND_NAME));
         textElements.add(vitals);
-        textElements.add(createFoodElement(vitals));
+        textElements.add(createBuiltIn(KIND_FOOD));
+        textElements.add(createBuiltIn(KIND_ARMOR));
         save();
     }
 

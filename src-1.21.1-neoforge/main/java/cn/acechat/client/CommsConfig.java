@@ -1191,9 +1191,10 @@ public final class CommsConfig {
 
     /** 三个固定内置元素（玩家名称 / 生命 / 饥饿）。 */
     public static java.util.List<TextElement> builtInElements() {
-        java.util.List<TextElement> result = new java.util.ArrayList<>(3);
+        java.util.List<TextElement> result = new java.util.ArrayList<>(4);
         for (TextElement element : textElements) {
-            if (KIND_NAME.equals(element.kind) || KIND_VITALS.equals(element.kind) || KIND_FOOD.equals(element.kind)) {
+            if (KIND_NAME.equals(element.kind) || KIND_VITALS.equals(element.kind)
+                    || KIND_FOOD.equals(element.kind) || KIND_ARMOR.equals(element.kind)) {
                 result.add(element);
             }
         }

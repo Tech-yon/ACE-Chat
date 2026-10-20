@@ -244,6 +244,7 @@
   "config.acechat.tab.filters.tooltip": "Filter presets: overlay filters for the portrait (scanlines / grain / vignette / duotone / dots, or your own PNG) plus color grading (brightness / contrast / saturation / hue / duotone). Save them as presets and re-apply anytime.",
   "screen.acechat.filters.overlay": "Overlay filter (covers the whole portrait card)",
   "screen.acechat.filters.grade": "Color grading (baked into the skin, zero per-frame cost)",
+   "screen.acechat.filters.mask_grade": "Mask & color grade (overlay filter + grading)",
   "screen.acechat.filters.templates": "Presets (click to apply; name goes in the box below)",
   "screen.acechat.filters.save": "Save as preset",
   "screen.acechat.filters.delete": "Delete that preset",

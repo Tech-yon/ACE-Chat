@@ -672,7 +672,11 @@ public final class CommsHud {
             case CENTER -> x + (width - textWidth) / 2 + sx;
             case RIGHT -> x + width - textWidth + sx;
          };
-         int tinted = applyElementTint(element.color, elementTint());
+         // 自定义文字元素独立于「蒙版/调色」：直接用元素自己的颜色（含自己的透明度），
+         // 内置四元素仍然跟随蒙版调色，保证整体风格一致。
+         int tinted = CommsConfig.KIND_CUSTOM.equals(element.kind)
+                 ? element.color
+                 : applyElementTint(element.color, elementTint());
          int ty = switch (element.vertical) {
             case TOP -> y + sy;
             case CENTER -> y + (height - textHeight) / 2 + sy;

@@ -244,6 +244,7 @@
   "config.acechat.tab.filters.tooltip": "滤镜模板：给形象框加叠加滤镜（扫描线/噪点/暗角/双色调/点阵，或自己的 PNG），再做调色（亮度/对比度/饱和度/色相/双色调），可存成模板反复套用。",
   "screen.acechat.filters.overlay": "叠加滤镜（铺满整个形象框）",
   "screen.acechat.filters.grade": "调色（烘焙进皮肤，每帧零开销）",
+   "screen.acechat.filters.mask_grade": "蒙版调色（叠加滤镜 + 调色）",
   "screen.acechat.filters.templates": "模板（点一下套用；名字填在下面输入框）",
   "screen.acechat.filters.save": "保存为模板",
   "screen.acechat.filters.delete": "删除该模板",

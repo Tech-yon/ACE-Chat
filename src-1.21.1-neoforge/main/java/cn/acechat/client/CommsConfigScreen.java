@@ -523,8 +523,7 @@ public final class CommsConfigScreen extends Screen {
       this.cardFunctionRow("screen.acechat.preview", 3);
       this.cardFunctionRow("screen.acechat.elements", 5);
       this.cardFunctionRow("screen.acechat.names", 4);
-      this.cardFunctionRow("screen.acechat.filters.overlay", 6);
-      this.cardFunctionRow("screen.acechat.filters.grade", 6);
+      this.cardFunctionRow("screen.acechat.filters.mask_grade", 6);
    }
 
    /** 一行一个卡按钮（默认卡用）。 */

@@ -1243,7 +1243,9 @@ public final class CommsConfigScreen extends Screen {
          int bw = Math.max(60, (w - 12) / 3);
          this.addRenderableWidget(Button.builder(Component.translatable("screen.acechat.elements.add"), b -> {
             CommsConfig.TextElement created = new CommsConfig.TextElement("自定义文字", CommsConfig.Horizontal.LEFT,
-               CommsConfig.Vertical.BOTTOM, 6, -4, 9, 0xFFFFFFFF, true, 160);
+               CommsConfig.Vertical.TOP, CommsConfig.X_CUSTOM,
+               CommsConfig.elementLineTop() + CommsConfig.ROW_CUSTOM * (CommsConfig.customElements().size() + 1),
+               CommsConfig.SIZE_CUSTOM, 0xFFFFFFFF, true, 160);
             created.kind = CommsConfig.KIND_CUSTOM;
             created.visible = Boolean.TRUE;
             CommsConfig.textElements.add(created);
@@ -1358,7 +1360,12 @@ public final class CommsConfigScreen extends Screen {
          if (firstPage) {
             int bw = Math.max(72, (w - 6) / 2);
             this.addRenderableWidget(Button.builder(Component.translatable("screen.acechat.reset.section_all"), b -> {
-               CommsConfig.resetSection(section);
+               if (section == CommsConfig.Section.ELEMENTS) {
+                  CommsConfig.resetElementsSafe();
+               } else {
+                  CommsConfig.resetSection(section);
+               }
+
                CommsConfig.save();
                this.notify("screen.acechat.reset.section_done");
                this.init();
@@ -1530,7 +1537,7 @@ public final class CommsConfigScreen extends Screen {
       this.rowLabel("config.acechat.reset.hint");
       this.addRow(1, (x, y, w) -> this.addRenderableWidget(
          Button.builder(Component.translatable("screen.acechat.reset.elements"), b -> {
-            CommsConfig.resetElements();
+            CommsConfig.resetElementsSafe();
             this.selectedElement = 0;
             this.notify("screen.acechat.reset.done");
             this.init();
@@ -1538,7 +1545,7 @@ public final class CommsConfigScreen extends Screen {
       ));
       this.addRow(1, (x, y, w) -> this.addRenderableWidget(
          Button.builder(Component.translatable("screen.acechat.reset.all"), b -> {
-            CommsConfig.saveAndResetDefaults();
+            CommsConfig.resetCardToDefault();
             this.selectedElement = 0;
             this.selectedName = 0;
             this.notify("screen.acechat.reset.done");

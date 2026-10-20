@@ -119,7 +119,7 @@ public final class CommsConfig {
      * 预览页的拖动目标：0 = 关闭拖动，1 = 只拖卡片，2 = 只拖文字元素，3 = 全部。
      * 默认只拖卡片，避免在预览区随手一按就抓到别的部件（误触）。
      */
-    public static final Value<Integer> previewDragTarget = integer(1, 0, 3);
+    public static final Value<Integer> previewDragTarget = integer(0, 0, 3);
 
     /**
      * 不滚动时，屏幕上最多显示多少条聊天（0 = 不限制）。
@@ -146,14 +146,14 @@ public final class CommsConfig {
     public static final Value<List<String>> whitelist = list(List.of());
 
     public static final Value<Boolean> portraitEnabled = bool(true);
-    public static final Value<Integer> portraitWidth = integer(122, 80, 300);
+    public static final Value<Integer> portraitWidth = integer(110, 80, 300);
     public static final Value<Integer> portraitHeight = integer(138, 90, 340);
     public static final Value<Integer> portraitXOffset = integer(0, -1000, 1000);
     public static final Value<Integer> portraitYOffset = integer(0, -1000, 1000);
-    public static final Value<Double> portraitScale = decimal(1.0D, 0.5D, 2.0D);
+    public static final Value<Double> portraitScale = decimal(0.7D, 0.5D, 2.0D);
     public static final Value<Anchor> portraitAnchor = new Value<>(Anchor.TOP_RIGHT, v -> v == null ? Anchor.TOP_RIGHT : v);
-    public static final Value<Double> portraitXRatio = decimal(0.98D, 0.0D, 1.0D);
-    public static final Value<Double> portraitYRatio = decimal(0.08D, 0.0D, 1.0D);
+    public static final Value<Double> portraitXRatio = decimal(0.8367924528301887D, 0.0D, 1.0D);
+    public static final Value<Double> portraitYRatio = decimal(0.03478364100433349D, 0.0D, 1.0D);
     public static final Value<Boolean> portraitFollowChat = bool(false);
     /** 常驻开关：打开后没有聊天时也一直显示形象框（显示自己的形象），关闭则只在玩家发言期间显示。 */
     public static final Value<Boolean> portraitAlwaysVisible = bool(false);
@@ -173,7 +173,7 @@ public final class CommsConfig {
     public static final Value<Integer> portraitBustScale = integer(100, 40, 150);
     // 证件卡式布局：上半是照片框（只画头/头肩/半身），下半是文字区
     /** 0=只画头像 1=头肩（默认） 2=半身 */
-    public static final Value<Integer> portraitPhotoMode = integer(4, 0, 4);
+    public static final Value<Integer> portraitPhotoMode = integer(1, 0, 4);
     /** 照片区占面板内区高度的百分比（%）。 */
     public static final Value<Integer> portraitPhotoHeight = integer(60, 30, 90);
     /** 照片区与文字区之间的细分隔线。 */
@@ -242,7 +242,7 @@ public final class CommsConfig {
     public static final Value<Boolean> portraitUseImage = bool(false);
     /** 皮肤/立绘绘制时的 X/Y 偏移（像素），各显示模式通用。 */
     public static final Value<Integer> skinOffsetX = integer(0, -120, 120);
-    public static final Value<Integer> skinOffsetY = integer(0, -120, 120);
+    public static final Value<Integer> skinOffsetY = integer(2, -120, 120);
 
     // ---- 死亡覆盖图 ----
     /** 是否启用死亡覆盖图（玩家发言期间死亡时覆盖其形象）。 */
@@ -397,18 +397,67 @@ public final class CommsConfig {
         return element == null || element.visible == null || element.visible;
     }
 
+    /**
+     * 文字元素本体预设：相对第一行（玩家名称）的<b>逐行偏移</b> + 各行的字号与 x。
+     *
+     * <p>取自本体预设卡的排版（名字 / 自定义 / 生命·护甲 / 饥饿）。<b>不是等距</b>：行距 15 / 13 / 13，
+     * 以前那套「单一 ELEMENT_GAP」已经不够用，改成逐行常量，{@link #createBuiltIn}、
+     * {@link #resetElementPositions}（安全重置）和「全部恢复为默认」共用这一张表，保证三条路径同源。
+     */
+    static final int ROW_CUSTOM = 15;
+    static final int ROW_VITALS = 28;
+    static final int ROW_FOOD = 41;
+    static final int SIZE_NAME = 10;
+    static final int SIZE_CUSTOM = 8;
+    static final int SIZE_VITALS = 8;
+    static final int SIZE_ARMOR = 9;
+    static final int SIZE_FOOD = 8;
+    static final int X_NAME = -1;
+    static final int X_CUSTOM = -1;
+    static final int X_VITALS = -3;
+    static final int X_ARMOR = 51;
+    static final int X_FOOD = -3;
+    /** 第一行文字与照片底边之间至少留的空隙（卡片像素）。 */
+    static final int PHOTO_GAP = 4;
+    /** 最后一行文字与卡片内底边之间至少留的空隙（卡片像素）。 */
+    static final int BOTTOM_GAP = 3;
+
+    /**
+     * 文字区第一行（玩家名称）的 y 坐标 —— <b>新建元素 / 安全重置 / 全部恢复默认三条路径共用</b>。
+     *
+     * <p><b>单位坑</b>：元素坐标会被渲染时乘上 {@link #elementScale(int)}（≈ 内宽 / elementBaseWidth），
+     * 而照片高度是「卡片内高的百分比」（{@link #portraitPhotoHeight}）。所以不能直接拿百分比当像素用 ——
+     * 这里先把照片底边算成<b>卡片像素</b>，除以 scale 换回元素单位，再留出 {@link #PHOTO_GAP} 的空隙；
+     * 同时保证最后一行（饥饿）连同字高仍在卡片内（{@link #BOTTOM_GAP}），两个约束取更保守的那个。
+     */
+    static int elementLineTop() {
+        int cardH = Math.max(90, portraitHeight.get());
+        int border = Math.max(0, portraitBorderThickness.get());
+        int pad = Math.max(0, portraitBackdropPadding.get());
+        int innerH = Math.max(8, cardH - (border + pad) * 2);
+        int innerW = Math.max(8, portraitWidth.get() - (border + pad) * 2);
+        int percent = Math.max(30, Math.min(90, portraitPhotoHeight.get()));
+        float scale = elementScale(innerW);
+        float photoBottom = innerH * (percent / 100.0F);
+        // 想要的位置：照片底下留 PHOTO_GAP；上限：饥饿那一行（含字高）不越过内底边
+        float wanted = (photoBottom + PHOTO_GAP) / scale;
+        float limit = (innerH - BOTTOM_GAP) / scale - ROW_FOOD - SIZE_FOOD;
+
+        return Math.max(0, Math.round(Math.min(wanted, limit)));
+    }
+
     private static TextElement createBuiltIn(String kind) {
         TextElement element;
         if (KIND_NAME.equals(kind)) {
-            element = new TextElement("%player_name%", Horizontal.LEFT, Vertical.TOP, -1, 76, 8, 0xFFD6DEE8, true, 160);
+            element = new TextElement("%player_name%", Horizontal.LEFT, Vertical.TOP, X_NAME, elementLineTop(), SIZE_NAME, 0xFFD6DEE8, true, 160);
         } else if (KIND_FOOD.equals(kind)) {
             // 第三条固定内置：紧贴「生命」下面一行；字号/颜色/阴影与生命一致
-            element = new TextElement(FOOD_CONTENT, Horizontal.LEFT, Vertical.TOP, -2, 100, 6, 0xFF9AA6B2, false, 160);
+            element = new TextElement(FOOD_CONTENT, Horizontal.LEFT, Vertical.TOP, X_FOOD, elementLineTop() + ROW_FOOD, SIZE_FOOD, 0xFF9AA6B2, false, 160);
         } else if (KIND_ARMOR.equals(kind)) {
-            // 第四条固定内置：紧贴「饥饿」下面一行；字号/颜色/阴影与生命、饥饿完全一致
-            element = new TextElement(ARMOR_CONTENT, Horizontal.LEFT, Vertical.TOP, 40, 92, 6, 0xFF9AA6B2, false, 160);
+            // 第四条固定内置：与「生命」同一行（护甲在右）；字号/颜色/阴影与生命、饥饿完全一致
+            element = new TextElement(ARMOR_CONTENT, Horizontal.LEFT, Vertical.TOP, X_ARMOR, elementLineTop() + ROW_VITALS, SIZE_ARMOR, 0xFF9AA6B2, false, 160);
         } else {
-            element = new TextElement(VITALS_CONTENT, Horizontal.LEFT, Vertical.TOP, -2, 100, 6, 0xFF9AA6B2, false, 160);
+            element = new TextElement(VITALS_CONTENT, Horizontal.LEFT, Vertical.TOP, X_VITALS, elementLineTop() + ROW_VITALS, SIZE_VITALS, 0xFF9AA6B2, false, 160);
         }
         element.kind = kind;
         element.visible = Boolean.TRUE;
@@ -573,7 +622,7 @@ public final class CommsConfig {
                 centerXOffset.reset(); topYOffset.reset(); boxWidth.reset();
             }
             case NAMES -> nameColors.clear();
-            case ELEMENTS -> resetElements();
+            case ELEMENTS -> resetElementsSafe();
             case FILTERS -> {
 
                 filterEnabled.reset(); filterName.reset(); filterAlpha.reset(); filterBlend.reset();
@@ -736,6 +785,13 @@ public final class CommsConfig {
             return;
         }
 
+        applyCardData(data);
+    }
+
+    /**
+     * 把一份卡快照应用进配置字段，然后<b>把全局项覆盖回去</b>（卡名 {@code activeCard} 不在这里改）。
+     */
+    private static void applyCardData(JsonObject data) {
         // 全局项先存下来
         boolean hud = hudEnabled.get();
         int centerX = centerXOffset.get();
@@ -842,6 +898,40 @@ public final class CommsConfig {
         PortraitGrade.invalidate();
     }
 
+    /**
+     * 「全部恢复为默认」：把<b>当前这张卡</b>的卡内容重置成默认卡（{@code _default}）的样子。
+     *
+     * <p>默认卡就是本体预设（形象框几何 / 滤镜调色 / 四条内置文字元素…）。会变的只有卡内容：
+     * 聊天框、音效、名单、素材目录这些全局项不动，卡名不变，<b>其它卡文件一个都不动</b>。
+     * 玩家自己加的自定义文字元素保留（内容 / 颜色 / 字号不删），只是跟着预设重排位置。
+     *
+     * @return 默认卡存在并应用成功 true；默认卡缺失时退回代码出厂默认并返回 false
+     */
+    public static boolean resetCardToDefault() {
+        JsonObject base = PlayerCards.read(PlayerCards.DEFAULT_CARD);
+        if (base == null) {
+            // 默认卡文件丢了：退回代码里的出厂默认（等价于全新安装）
+            resetAll();
+            ensureBuiltInElements();
+            resetElementPositions(false);
+            save(!PlayerCards.DEFAULT_CARD.equals(activeCard.get()));
+            return false;
+        }
+
+        java.util.List<TextElement> customs = new java.util.ArrayList<>(customElements());
+        applyCardData(base);
+        // 自定义文字是「内容」不是「外观」：恢复默认时保留，只重新摆位置。
+        // 默认卡里万一也带了自定义元素，一律丢掉，只留四条固定内置，避免出现两份重复条目。
+        textElements.removeIf(element -> !KIND_NAME.equals(element.kind) && !KIND_VITALS.equals(element.kind)
+                && !KIND_FOOD.equals(element.kind) && !KIND_ARMOR.equals(element.kind));
+        textElements.addAll(customs);
+        ensureBuiltInElements();
+        resetElementPositions(false);
+        // 只写全局文件；当前卡不是默认卡时才写卡文件（默认卡是本体预设，不能被写脏）
+        save(!PlayerCards.DEFAULT_CARD.equals(activeCard.get()));
+        return true;
+    }
+
     /** 某玩家应该用哪张卡：有专属卡就用它，否则用默认卡。 */
     public static String cardForPlayer(String playerName) {
         if (playerName == null || playerName.isEmpty()) {
@@ -873,11 +963,21 @@ public final class CommsConfig {
     }
 
     public static void save() {
+        save(true);
+    }
+
+    /**
+     * @param writeActiveCard false = 只写全局文件 {@code client.json}，不动当前卡文件。
+     *                        「恢复默认」用它，免得把默认卡本身（本体预设）写脏。
+     */
+    private static void save(boolean writeActiveCard) {
         // 每张卡的改动都即时写盘（卡文件与全局文件同时保持最新）
-        try {
-            PlayerCards.write(activeCard.get(), toJson());
-        } catch (RuntimeException | LinkageError ignored) {
-            // 卡写不进去也不影响主配置
+        if (writeActiveCard) {
+            try {
+                PlayerCards.write(activeCard.get(), toJson());
+            } catch (RuntimeException | LinkageError ignored) {
+                // 卡写不进去也不影响主配置
+            }
         }
 
         try {
@@ -920,8 +1020,10 @@ public final class CommsConfig {
      * 都靠文字区左边、自下往上排，和参考卡片的「W. COSTER / NOISE / -LT FCU NAVY」一个意思。
      */
     /**
-     * 恢复默认：回到「玩家名称 / 生命 / 饥饿」三条 —— 生命在上、饥饿在下（分两行），
-     * 并清空其它自定义元素。
+     * 建一套全新的默认元素：玩家名称 / 生命 / 饥饿 / 护甲 四条，<b>并清空其它自定义元素</b>。
+     *
+     * <p>只在「压根没有配置 / 配置损坏」时使用（{@code load()} 的兜底、老 TOML 缺失、v5 迁移）。
+     * <b>界面上的四个重置按钮一律不走它</b> —— 它们走 {@link #resetElementsSafe()}，自定义元素保留。
      */
     public static void resetElements() {
         textElements.clear();
@@ -930,6 +1032,18 @@ public final class CommsConfig {
         textElements.add(vitals);
         textElements.add(createBuiltIn(KIND_FOOD));
         textElements.add(createBuiltIn(KIND_ARMOR));
+        save();
+    }
+
+    /**
+     * 安全重置文字元素：<b>保留自定义元素</b>，补齐四条固定内置，并按当前形象框几何重排。
+     *
+     * <p>「全部恢复默认」在文字元素分区走这条路径 —— 效果和「安全重置：把文字摆回框内」一致，
+     * 不会把玩家自己加的自定义文字删掉（以前的 resetSection(ELEMENTS) 会整组重建）。
+     */
+    public static void resetElementsSafe() {
+        ensureBuiltInElements();
+        resetElementPositions();
         save();
     }
 
@@ -1078,7 +1192,9 @@ public final class CommsConfig {
 
         // v7：照片内容默认改成「全身（人物・含二层）」。旧版本默认值是 3（完整贴图原图），
         // 那一档不把二层合成到人物身上，容易被误认为「不显示二层皮肤」，所以顺手迁移掉。
-        if (version < 7 && portraitPhotoMode.get() == 3) {
+        // v3 时代的配置连 photoMode 字段都没有（那时的默认就是 3），同样按旧默认迁移 —— 不能让它
+        // 落到新的本体默认（1 = 头肩），否则老存档升级后画面会突然变。
+        if (version < 7 && (!object(root, "portrait").has("photoMode") || portraitPhotoMode.get() == 3)) {
             portraitPhotoMode.set(4);
         }
 
@@ -1137,12 +1253,20 @@ public final class CommsConfig {
      * @return 受影响的元素数量
      */
     public static int resetElementPositions() {
-        // 默认布局 = 当前实机调好的那套（照片下方：名字 / 自定义 / 生命+护甲同一行 / 饥饿），包含字号
+        return resetElementPositions(true);
+    }
+
+    /**
+     * @param writeActiveCard 是否顺便把当前卡写盘（内部嵌套调用时用 false，让上层自己决定）
+     */
+    private static int resetElementPositions(boolean writeActiveCard) {
+        // 默认布局 = 本体预设卡那套（照片下方：名字 / 自定义 / 生命+护甲同一行 / 饥饿），包含字号
         // 记下这次布局所针对的卡片宽度：之后缩放都以它为 1.0 倍
         elementBaseWidth = Math.max(1, portraitWidth.get());
 
-        // 文字区起点 = 照片底边（那条绿线）+ 内边距 + 4px 间隙，保证四条都在绿线下面
-        int lineTop = Math.max(0, portraitPhotoHeight.get()) + Math.max(2, portraitBackdropPadding.get()) + 20;
+        // 文字区起点与逐行偏移：与「新建元素 / 全部恢复默认」共用同一张表（elementLineTop / ROW_*），
+        // 保证这三条路径摆出来的坐标完全一致
+        int lineTop = elementLineTop();
 
         int custom = 0;
         for (int i = 0; i < textElements.size(); i++) {
@@ -1150,38 +1274,38 @@ public final class CommsConfig {
             element.horizontal = Horizontal.LEFT;
             element.vertical = Vertical.TOP;
             if (KIND_NAME.equals(element.kind)) {
-                element.x = -1;
+                element.x = X_NAME;
                 element.y = lineTop;
-                element.size = 8;
+                element.size = SIZE_NAME;
                 element.color = 0xFFD6DEE8;
                 element.shadow = true;
                 element.visible = true;
             } else if (KIND_VITALS.equals(element.kind)) {
-                element.x = -2;
-                element.y = lineTop + 16;
-                element.size = 6;
+                element.x = X_VITALS;
+                element.y = lineTop + ROW_VITALS;
+                element.size = SIZE_VITALS;
                 element.color = 0xFF9AA6B2;
                 element.shadow = false;
                 element.visible = true;
             } else if (KIND_FOOD.equals(element.kind)) {
-                element.x = -2;
-                element.y = lineTop + 24;
-                element.size = 6;
+                element.x = X_FOOD;
+                element.y = lineTop + ROW_FOOD;
+                element.size = SIZE_FOOD;
                 element.color = 0xFF9AA6B2;
                 element.shadow = false;
                 element.visible = true;
             } else if (KIND_ARMOR.equals(element.kind)) {
                 // 护甲与生命同一行（生命左边、护甲右边）
-                element.x = 40;
-                element.y = lineTop + 16;
-                element.size = 6;
+                element.x = X_ARMOR;
+                element.y = lineTop + ROW_VITALS;
+                element.size = SIZE_ARMOR;
                 element.color = 0xFF9AA6B2;
                 element.shadow = false;
                 element.visible = true;
             } else {
-                // 自定义元素：名字下面一行，再往下依次排
-                element.x = -1;
-                element.y = lineTop + 9 + custom * 8;
+                // 自定义元素：名字下面一行，再往下依次排（位置重排，内容/颜色/字号一律不动）
+                element.x = X_CUSTOM;
+                element.y = lineTop + ROW_CUSTOM * (custom + 1);
                 custom++;
             }
         }
@@ -1359,7 +1483,13 @@ public final class CommsConfig {
     private static JsonArray array(List<String> values) { JsonArray result = new JsonArray(); values.forEach(result::add); return result; }
     private static void add(JsonObject o, String key, Object value) { o.add(key, GSON.toJsonTree(value)); }
     private static String mappedValue(List<String> mappings, String playerName, String fallback) { for (String entry : mappings) { int split = entry.indexOf('='); if (split > 0 && split < entry.length() - 1 && entry.substring(0, split).trim().equalsIgnoreCase(playerName)) return entry.substring(split + 1).trim(); } return fallback; }
-    public static void saveAndResetDefaults() { resetAll(); resetElements(); save(); }
+    /**
+     * 出厂默认：把所有字段（<b>含全局项</b>）重置成代码里的本体预设，再按预设重排文字元素并写盘。
+     *
+     * <p>界面上的「全部恢复为默认」<b>不再走这里</b> —— 它走 {@link #resetCardToDefault()}（只动当前卡）。
+     * 这个留着做两件事：默认卡文件缺失时的兜底、以及生成 {@code _default.json}。
+     */
+    public static void saveAndResetDefaults() { resetAll(); resetElementsSafe(); save(); }
     private static void resetAll() { hudEnabled.reset(); centerXOffset.reset(); topYOffset.reset(); maxLines.reset(); boxWidth.reset(); backgroundAlpha.reset(); lineHoldSeconds.reset(); holdMinSeconds.reset(); holdMaxSeconds.reset(); chatBackgroundColor.reset(); chatNameColor.reset(); chatRightGap.reset(); chatLeftMargin.reset(); chatNameMaxWidth.reset(); chatSymbolPadding.reset(); chatSymbolColor.reset(); chatPaddingX.reset(); chatPaddingY.reset(); chatBorderEnabled.reset(); chatBorderColor.reset(); chatBorderThickness.reset(); filter.reset(); removeFromVanillaChat.reset(); vanillaPlayerChat.reset(); vanillaOtherMessages.reset(); includeActions.reset(); whitelist.reset(); chatVisibleLines.reset(); chatScreenLines.reset(); portraitEnabled.reset(); portraitWidth.reset(); portraitHeight.reset(); portraitXOffset.reset(); portraitYOffset.reset(); portraitScale.reset(); portraitAnchor.reset(); previewDragTarget.reset(); portraitXRatio.reset(); portraitYRatio.reset(); portraitFollowChat.reset(); portraitAlwaysVisible.reset(); portraitTint.reset(); portraitOpacity.reset(); portraitBrightness.reset(); portraitPanelColor.reset(); portraitPanelAlpha.reset(); portraitBorderColor.reset(); portraitBorderThickness.reset(); portraitBackdropEnabled.reset(); portraitBackdropColor.reset(); portraitBackdropAlpha.reset(); portraitBackdropPadding.reset(); portraitBustScale.reset(); skinOffsetX.reset(); skinOffsetY.reset(); portraitPhotoMode.reset(); portraitPhotoHeight.reset(); portraitPhotoDivider.reset(); portraitOuterLayer.reset(); capeEnabled.reset(); customPortraitEnabled.reset(); customPortraits.reset(); displayNames.reset(); customInfo.reset(); blipEnabled.reset(); goneSoundEnabled.reset(); soundVolume.reset(); newSoundPreset.reset(); newSoundVolume.reset(); newSoundPitch.reset(); newSoundSpeed.reset(); newSoundFadeIn.reset(); newSoundFadeOut.reset(); goneSoundPreset.reset(); goneSoundVolume.reset(); goneSoundPitch.reset(); goneSoundSpeed.reset(); goneSoundFadeIn.reset(); goneSoundFadeOut.reset(); portraitUseImage.reset(); portraitImageName.reset(); portraitImageScale.reset();
                 deathOverlayEnabled.reset(); deathPreset.reset(); deathImageMaxSize.reset();
                 deathImageScale.reset(); deathImageOffsetX.reset(); deathImageOffsetY.reset(); portraitImageOffsetX.reset(); portraitImageOffsetY.reset(); nameColors.clear(); filterTemplates.clear();

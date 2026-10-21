@@ -1,38 +1,72 @@
 package cn.acechat.client;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.UUID;
 
 /**
- * NeoForge 端口暂时没有服务端数据通道（网络 API 与 Forge 不同，需要单独实现）。
- * 这里保留同样的接口、永远返回空 → 渲染时自然回到 Unknown，与"服务端没装"表现一致。
+ * 服务端模块下发的「其它玩家数值」缓存（只读，不写配置文件）。
+ *
+ * <p>服务端每 20 tick 发一次快照；这里存 3 秒，过期就当作"没有"，
+ * 于是渲染时仍然回到 Unknown —— 与"服务端没装"时行为完全一致。
  */
 public final class RemoteStats {
-    public static void update(UUID id, double health, double maxHealth, int food, int armor) {
+    /** 一条快照：血量（含上限）、饥饿、护甲。 */
+    public record Snapshot(double health, double maxHealth, int food, int armor, long receivedAt) {
+        boolean fresh(long now) {
+            return now - receivedAt <= TTL_MS;
+        }
     }
 
+    private static final long TTL_MS = 3000L;
+    private static final Map<UUID, Snapshot> CACHE = new HashMap<>();
+
+    public static void update(UUID id, double health, double maxHealth, int food, int armor) {
+        if (id == null) {
+            return;
+        }
+
+        CACHE.put(id, new Snapshot(health, maxHealth, food, armor, System.currentTimeMillis()));
+    }
+
+    /** 断线/换服时清空，避免拿到上一个服务器的旧数据。 */
     public static void clear() {
+        CACHE.clear();
     }
 
     public static int size() {
-        return 0;
+        return CACHE.size();
+    }
+
+    private static Snapshot fresh(UUID id) {
+        if (id == null) {
+            return null;
+        }
+
+        Snapshot snapshot = CACHE.get(id);
+        return snapshot != null && snapshot.fresh(System.currentTimeMillis()) ? snapshot : null;
     }
 
     public static OptionalDouble health(UUID id) {
-        return OptionalDouble.empty();
+        Snapshot s = fresh(id);
+        return s == null ? OptionalDouble.empty() : OptionalDouble.of(s.health());
     }
 
     public static OptionalDouble maxHealth(UUID id) {
-        return OptionalDouble.empty();
+        Snapshot s = fresh(id);
+        return s == null ? OptionalDouble.empty() : OptionalDouble.of(s.maxHealth());
     }
 
     public static OptionalInt food(UUID id) {
-        return OptionalInt.empty();
+        Snapshot s = fresh(id);
+        return s == null ? OptionalInt.empty() : OptionalInt.of(s.food());
     }
 
     public static OptionalInt armor(UUID id) {
-        return OptionalInt.empty();
+        Snapshot s = fresh(id);
+        return s == null ? OptionalInt.empty() : OptionalInt.of(s.armor());
     }
 
     private RemoteStats() {

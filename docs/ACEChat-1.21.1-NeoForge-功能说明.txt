@@ -2,7 +2,7 @@
 适用版本：Minecraft 1.21.1 + NeoForge 21.1.x
 构建版本：1.0.0-neoforge-1.21.1-r9（构建号 v0.032）
 配置文件版本：v18（与 1.20.1 版同一套，可直接沿用那边的 ACE_config/）
-jar 校验值：SHA256 2FCDEAC08FE1ABD4A1D2131B8AA033F185CC9CAB8CB548094BEDFB6B5ED20B44
+jar 校验值：SHA256 E0C723DD88B4325496D3CB0200342C7523E424D8A6D2262EF5EA5CA1072F2DFF
 版本性质：公测版（2026-10-21）—— 欢迎反馈问题，反馈时请附上 logs\latest.log 里带 [acechat] 的行
 ================================================================
 
@@ -33,10 +33,16 @@ jar 校验值：SHA256 2FCDEAC08FE1ABD4A1D2131B8AA033F185CC9CAB8CB548094BEDFB6B5
        其它角色卡一律不动；只有当前这张卡的卡内容按默认卡覆盖。
     7. 【自定义文字元素不会被重置删掉】安全重置 / 元素页「全部恢复为默认」/「恢复默认文字元素」/
        「全部恢复为默认」四个按钮都保留你自己加的自定义文字元素，只重排它们的位置。
-  三、验证
-    8. 编译 0 错误（Forge 33 / SPEC 34 / NeoForge 30 个 java 文件）；无头功能测试 63 / 63（Forge、NeoForge）；
-       文字元素排版与重置断言 34 / 34 × 三平台；无头回放真实角色卡点「恢复默认」后元素坐标逐项一致、
-       默认卡文件 SHA 不变（不会被写脏）。
+  三、NeoForge 端口补齐
+    8. 【服务端数据通道】1.21 端口按新网络 API（CustomPacketPayload + RegisterPayloadHandlersEvent）重写：
+       通道 cechat:sync 声明为 optional —— 服务端装了就每秒下发在线玩家数值，没装照旧 Unknown、也不会被踢；
+       至此三平台的服务端数据能力一致（Forge / SPEC 早在 v0.03 就有，NeoForge 这次补齐）。
+       另外该 jar 体积从 391,695 增至 400,081 字节，多了 3 个类（StatsPayload / AceChatNetwork / ServerStatsSync）。
+
+  四、验证
+    9. 编译 0 错误（Forge 33 / SPEC 34 / NeoForge 33 个 java 文件）；无头功能测试 63 / 63（Forge、NeoForge）；
+       文字元素排版与重置断言 34 / 34 × 三平台；数据通道断言 11 / 11（NeoForge）；
+       无头回放真实角色卡点「恢复默认」后元素坐标逐项一致、默认卡文件 SHA 不变（不会被写脏）。
 
 【三十一、本次更新记录：v0.031】
   1. 自定义文字元素不再被「蒙版/调色」覆盖：直接使用元素自身的颜色与透明度，

@@ -12,6 +12,7 @@
 | `src-1.20.1-forge/` | 1.20.1 Forge 标准版 |
 | `src-1.21.1-neoforge/` | 1.21.1 NeoForge 标准版 |
 | `src-1.20.1-forge-spec/` | **SPEC 分支**：对 NoChatReports 等"会把玩家聊天改写成系统消息"的模组的适配版 |
+| `docs/` | 对外文档：模组介绍（长版 / 一段式）、开源声明、三个平台的《功能说明》、视频简介 |
 
 每个目录里只有 `src/main/java`（源码）与 `src/main/resources`（语言文件、`mods.toml`、许可证、音效解码依赖）。
 

@@ -106,8 +106,8 @@ public final class ClientEvents {
     private static void applyConfiguredNameColor(ClientChatReceivedEvent event, UUID sender, String name) {
         Component original = event.getMessage();
         int argb = configuredNameColor(sender, name);
-        // 名字用名单色/初始色；名字两侧的「<>」与顶部 HUD 用同一个「「<>」符号颜色」设置（默认白）
-        Component rebuilt = NameRecolor.recolorNameAndBrackets(original, name, argb, CommsConfig.chatSymbolColor.get());
+        // 名字用名单色/初始色；名字两侧的「<>」也跟名字同色（不再单独取符号颜色）
+        Component rebuilt = NameRecolor.recolorNameAndBrackets(original, name, argb, argb);
         if (rebuilt != original) {
             event.setMessage(rebuilt);
         }

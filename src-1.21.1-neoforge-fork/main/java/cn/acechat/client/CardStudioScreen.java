@@ -447,7 +447,12 @@ public class CardStudioScreen extends Screen {
 
         sectionLabel("名字颜色（角色卡）");
         addColorRow("默认名字颜色", CommsConfig.chatNameColor);
-        addColorRow("符号颜色（原版聊天）", CommsConfig.chatSymbolColor);
+        // 符号颜色不再单独设置：统一跟随名字颜色（HUD / 原版回放 / 注入历史都同一套）
+        Button symbolInfo = Button.builder(Component.literal("符号颜色：跟随名字颜色（不单独设置）"), b -> { })
+                .bounds(fieldX(), this.cursorY, fieldW(), 16).build();
+        symbolInfo.active = false;
+        addWidget(symbolInfo);
+        this.cursorY += ROW;
 
         int half2 = Math.max(80, (fieldW() - 6) / 2);
         addButton("+ 新增一条", fieldX(), this.cursorY, half2, () -> {

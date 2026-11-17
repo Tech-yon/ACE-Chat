@@ -701,37 +701,29 @@ public final class CommsConfig {
         return " ".repeat(Math.round(padding / 4.0F));
     }
 
-    /** 「&lt;&gt;」符号的样式（颜色取 {@link #chatSymbolColor}）。 */
-    public static net.minecraft.network.chat.Style chatSymbolStyle() {
-        return net.minecraft.network.chat.Style.EMPTY
-                .withColor(net.minecraft.network.chat.TextColor.fromRgb(chatSymbolColor.get() & 0xFFFFFF));
-    }
-
-    /** 聊天正文的样式（固定白色）。 */
-    public static net.minecraft.network.chat.Style chatBodyStyle() {
-        return net.minecraft.network.chat.Style.EMPTY
-                .withColor(net.minecraft.network.chat.TextColor.fromRgb(0xFFFFFF));
-    }
-
     /**
      * 拼一条聊天行：<b>玩家名称</b> + <b>&lt;&gt; 符号</b> + <b>内容</b> 三段。
      *
      * <p>符号与内容之间的间隔由 {@link #chatSymbolPadding} 决定（按 4px 粒度折算成空格，
-     * 左右半边同时生效）；符号颜色用 {@link #chatSymbolColor}；内容固定白色。
+     * 左右半边同时生效）；<b>符号颜色跟随名字颜色</b>（与 HUD 完全一致），内容固定白色。
      *
      * <p>顶部 HUD 的聊天框不走这里：它由 {@link ChatLayout} 自己按行排版（名字/符号/正文同行规则），
-     * 但符号与样式取的是同一批方法（{@link #chatSymbolPad()} / {@link #chatSymbolStyle()} /
-     * {@link #chatBodyStyle()}），保证「HUD 里看到的」和「按 T 注入的历史行」长得一样。
+     * 但符号与样式取的是同一套规则，保证「HUD 里看到的」和「按 T 注入的历史行」长得一样。
      */
     public static net.minecraft.network.chat.Component chatLine(String name, String text, net.minecraft.network.chat.Style nameStyle) {
         String pad = chatSymbolPad();
-        net.minecraft.network.chat.Style symbolStyle = chatSymbolStyle();
+        net.minecraft.network.chat.Style symbolStyle = nameStyle == null ? net.minecraft.network.chat.Style.EMPTY : nameStyle;
 
         return net.minecraft.network.chat.Component.literal(name == null ? "" : name)
                 .withStyle(nameStyle == null ? net.minecraft.network.chat.Style.EMPTY : nameStyle)
                 .append(net.minecraft.network.chat.Component.literal(" <" + pad).withStyle(symbolStyle))
                 .append(net.minecraft.network.chat.Component.literal(text == null ? "" : text).withStyle(chatBodyStyle()))
                 .append(net.minecraft.network.chat.Component.literal(pad + ">").withStyle(symbolStyle));
+    }
+    /** 聊天正文的样式（固定白色）。 */
+    public static net.minecraft.network.chat.Style chatBodyStyle() {
+        return net.minecraft.network.chat.Style.EMPTY
+                .withColor(net.minecraft.network.chat.TextColor.fromRgb(0xFFFFFF));
     }
 
     public static Style nameStyleFor(String uuid, String name) {

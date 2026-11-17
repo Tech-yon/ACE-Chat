@@ -1948,7 +1948,7 @@ private void rebuildRowsOnly() {
       this.rowSliderInt("config.acechat.chat.left_margin", 0, 240, true, " px", false, CommsConfig.chatLeftMargin);
       this.rowSliderInt("config.acechat.chat.name_max_width", 20, 400, true, " px", false, CommsConfig.chatNameMaxWidth);
       this.rowSliderInt("config.acechat.chat.symbol_padding", 0, 16, true, " px", false, CommsConfig.chatSymbolPadding);
-      this.rowColor("config.acechat.chat.symbol_color", CommsConfig.chatSymbolColor);
+      // 符号颜色已取消单独设置：跟随名字颜色（见 CommsConfig.chatLine / CommsHud.buildLines）
       this.rowSliderInt("config.acechat.chat.padding_x", 0, 8, true, "", false, CommsConfig.chatPaddingX);
       this.rowSliderInt("config.acechat.chat.padding_y", 0, 8, true, "", false, CommsConfig.chatPaddingY);
       this.rowToggle("config.acechat.chat.border", CommsConfig.chatBorderEnabled);

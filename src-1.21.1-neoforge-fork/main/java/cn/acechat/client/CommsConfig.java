@@ -911,6 +911,10 @@ public final class CommsConfig {
     }
 
     public static void saveCard() {
+        // 同 save()：只有内存里确实是当前卡时才允许写回，避免串卡
+        if (appliedCard != null && !appliedCard.equals(activeCard.get())) {
+            return;
+        }
         com.google.gson.JsonObject data = toJson();
         // 聊天框样式属于「当前客户端」的全局设置，不写进角色卡（卡只存形象/文字/调色）
         data.remove("chat");
@@ -1120,6 +1124,12 @@ public final class CommsConfig {
      *                        「恢复默认」用它，免得把默认卡本身（本体预设）写脏。
      */
     private static void save(boolean writeActiveCard) {
+        // 渲染期可能临时套用了「说话人 / 编辑预览」的卡：此时内存里的内容不属于 activeCard。
+        // 只允许写自己的卡，否则会把别人的文字元素/形象写回当前卡，表现为“某张卡的元素叠到其它卡上”。
+        boolean ownCardApplied = appliedCard == null || appliedCard.equals(activeCard.get());
+        if (!ownCardApplied) {
+            writeActiveCard = false;
+        }
         // 每张卡的改动都即时写盘（卡文件与全局文件同时保持最新）
         if (writeActiveCard) {
             try {

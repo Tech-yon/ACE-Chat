@@ -445,6 +445,12 @@ public class CardStudioScreen extends Screen {
         });
         this.cursorY += ROW;
 
+        addButton("安全重置位置（保留内容/颜色/字号）", fieldX(), this.cursorY, fieldW(), () -> {
+            CommsConfig.resetElementPositions();
+            this.init();
+        });
+        this.cursorY += ROW;
+
         sectionLabel("名字颜色（角色卡）");
         addColorRow("默认名字颜色", CommsConfig.chatNameColor);
 

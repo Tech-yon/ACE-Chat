@@ -4,7 +4,7 @@
 > modId 仍是 `acechat`，**不能和稳定版同时放进 mods**。
 
 - 当前版本：`0.1.3.6`
-- 当前 jar：`1,434,795 字节 / SHA256 F52058B4A276C671A1622B928F9DAD55A1D736FA58DB66B974DD5EF1E6B6E913`（构建目录，待安装）
+- 当前 jar：`1,434,795 字节 / SHA256 F52058B4A276C671A1622B928F9DAD55A1D736FA58DB66B974DD5EF1E6B6E913`（**已安装**到 mods，2026-11-17）
 - 源码：`_r9work/SACS-1.21.1-Neoforge-fork`
 - 构建：`_build/SACS-1.21.1-Neoforge-fork`
 

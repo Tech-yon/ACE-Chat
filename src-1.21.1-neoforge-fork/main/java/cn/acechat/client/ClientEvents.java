@@ -115,8 +115,7 @@ public final class ClientEvents {
 
     /** 与 {@link CommsConfig#nameStyleFor} 完全一致的取色：名单色优先，未配置（-1）用「玩家名初始颜色」。 */
     private static int configuredNameColor(UUID sender, String name) {
-        int argb = CommsConfig.nameColor(sender == null ? null : sender.toString(), name);
-        return argb == -1 ? CommsConfig.chatNameColor.get() : argb;
+        return CommsConfig.resolvedNameColor(sender == null ? null : sender.toString(), name);
     }
 
     @SubscribeEvent

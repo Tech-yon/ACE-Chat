@@ -266,6 +266,8 @@ public final class CommsConfig {
     public static final Value<Integer> portraitImageOffsetY = integer(0, -200, 200);
 
     public static final List<NameColor> nameColors = new ArrayList<>();
+    /** 本卡默认名字颜色（"RRGGBB"，空 = 跟随全局 chatNameColor）；随卡保存，演出/普通聊天都生效。 */
+    public static final Value<String> cardNameColor = text("");
     public static final List<TextElement> textElements = new ArrayList<>();
     /** 模组总目录：游戏主文件夹下的 ACE_config/（角色卡、素材、导出都集中在里面）。 */
     public static final Path CONFIG_DIR = AceChatFolders.rootDir();
@@ -652,10 +654,53 @@ public final class CommsConfig {
     }
     public static String customInfo(String playerName) { return mappedValue(customInfo.get(), playerName, ""); }
     public static int nameColor(String uuid, String name) {
+        NameColor item = findNameColor(uuid, name);
+        return item == null ? -1 : item.color;
+    }
+
+    /** 命中的名字颜色条目（没有返回 null）；单独拿出来是为了区分“白色 = 0xFFFFFFFF”与“未配置 -1”。 */
+    private static NameColor findNameColor(String uuid, String name) {
         for (NameColor item : nameColors) {
-            if ((uuid != null && !uuid.isBlank() && uuid.equalsIgnoreCase(item.uuid)) || (name != null && name.equalsIgnoreCase(item.name))) return item.color;
+            if ((uuid != null && !uuid.isBlank() && uuid.equalsIgnoreCase(item.uuid))
+                    || (name != null && name.equalsIgnoreCase(item.name))) {
+                return item;
+            }
         }
-        return -1;
+        return null;
+    }
+
+    /**
+     * 最终名字颜色：条目命中优先 → 本卡默认色 → 全局默认色。
+     * 白色条目（0xFFFFFFFF = -1）也按“命中”处理，不会被当成未配置。
+     */
+    public static int resolvedNameColor(String uuid, String name) {
+        NameColor item = findNameColor(uuid, name);
+        if (item != null) {
+            return item.color;
+        }
+        Integer own = cardNameColorArgb();
+        return own != null ? own : chatNameColor.get();
+    }
+
+    /** 本卡名字颜色（ARGB）；未设置返回 null。 */
+    public static Integer cardNameColorArgb() {
+        String hex = cardNameColor.get();
+        if (hex == null || hex.isBlank()) {
+            return null;
+        }
+        try {
+            return 0xFF000000 | Integer.parseInt(hex.replace("#", "").trim(), 16);
+        } catch (NumberFormatException error) {
+            return null;
+        }
+    }
+
+    public static void setCardNameColorArgb(int argb) {
+        cardNameColor.set(String.format("%06X", argb & 0xFFFFFF));
+    }
+
+    public static void clearCardNameColor() {
+        cardNameColor.set("");
     }
 
     /**
@@ -727,10 +772,7 @@ public final class CommsConfig {
     }
 
     public static Style nameStyleFor(String uuid, String name) {
-        int color = nameColor(uuid, name);
-        if (color == -1) {
-            color = chatNameColor.get();
-        }
+        int color = resolvedNameColor(uuid, name);
 
         return Style.EMPTY.withColor(TextColor.fromRgb(color & 0xFFFFFF));
     }
@@ -1256,6 +1298,7 @@ public final class CommsConfig {
         JsonArray names = new JsonArray(); nameColors.forEach(n -> names.add(GSON.toJsonTree(n))); root.add("nameColors", names); JsonArray templates = new JsonArray(); filterTemplates.forEach(t -> templates.add(GSON.toJsonTree(t))); root.add("filterTemplates", templates);
         JsonArray elements = new JsonArray(); textElements.forEach(e -> elements.add(GSON.toJsonTree(e))); root.add("textElements", elements);
         root.addProperty("ncrCompat", ncrCompat.get());
+        root.addProperty("cardNameColor", cardNameColor.get());
         return root;
     }
 
@@ -1276,6 +1319,8 @@ public final class CommsConfig {
         textElements.clear(); if (root.has("textElements") && root.get("textElements").isJsonArray()) for (JsonElement e : root.getAsJsonArray("textElements")) try { TextElement item = GSON.fromJson(e, TextElement.class); if (item != null) textElements.add(item); } catch (RuntimeException ignored) { }
         if (textElements.isEmpty()) resetElements();
         set(root, "ncrCompat", ncrCompat, JsonElement::getAsBoolean);
+        // 卡里没写这个字段（旧卡）时回到“跟随全局”，避免沿用上一张卡的颜色
+        cardNameColor.set(root.has("cardNameColor") ? root.get("cardNameColor").getAsString() : "");
         migrateLegacyDefaults(root);
     }
 
@@ -1607,7 +1652,7 @@ public final class CommsConfig {
     public static void saveAndResetDefaults() { resetAll(); resetElementsSafe(); save(); }
     private static void resetAll() { hudEnabled.reset(); centerXOffset.reset(); topYOffset.reset(); maxLines.reset(); boxWidth.reset(); backgroundAlpha.reset(); lineHoldSeconds.reset(); holdMinSeconds.reset(); holdMaxSeconds.reset(); chatBackgroundColor.reset(); chatNameColor.reset(); chatRightGap.reset(); chatLeftMargin.reset(); chatNameMaxWidth.reset(); chatSymbolPadding.reset(); chatSymbolColor.reset(); chatPaddingX.reset(); chatPaddingY.reset(); chatBorderEnabled.reset(); chatBorderColor.reset(); chatBorderThickness.reset(); filter.reset(); removeFromVanillaChat.reset(); vanillaPlayerChat.reset(); vanillaOtherMessages.reset(); includeActions.reset(); whitelist.reset(); chatVisibleLines.reset(); chatScreenLines.reset(); portraitEnabled.reset(); portraitChatHidden.reset(); portraitWidth.reset(); portraitHeight.reset(); portraitXOffset.reset(); portraitYOffset.reset(); portraitScale.reset(); portraitAnchor.reset(); previewDragTarget.reset(); portraitXRatio.reset(); portraitYRatio.reset(); portraitFollowChat.reset(); portraitAlwaysVisible.reset(); portraitTint.reset(); portraitOpacity.reset(); portraitBrightness.reset(); portraitPanelColor.reset(); portraitPanelAlpha.reset(); portraitBorderColor.reset(); portraitBorderThickness.reset(); portraitBackdropEnabled.reset(); portraitBackdropColor.reset(); portraitBackdropAlpha.reset(); portraitBackdropPadding.reset(); portraitBustScale.reset(); skinOffsetX.reset(); skinOffsetY.reset(); portraitPhotoMode.reset(); portraitPhotoHeight.reset(); portraitPhotoDivider.reset(); portraitOuterLayer.reset(); capeEnabled.reset(); customPortraitEnabled.reset(); customPortraits.reset(); displayNames.reset(); customInfo.reset(); blipEnabled.reset(); goneSoundEnabled.reset(); soundVolume.reset(); newSoundPreset.reset(); newSoundVolume.reset(); newSoundPitch.reset(); newSoundSpeed.reset(); newSoundFadeIn.reset(); newSoundFadeOut.reset(); goneSoundPreset.reset(); goneSoundVolume.reset(); goneSoundPitch.reset(); goneSoundSpeed.reset(); goneSoundFadeIn.reset(); goneSoundFadeOut.reset(); portraitUseImage.reset(); portraitImageName.reset(); portraitImageScale.reset();
                 deathOverlayEnabled.reset(); deathPreset.reset(); deathImageMaxSize.reset();
-                deathImageScale.reset(); deathImageOffsetX.reset(); deathImageOffsetY.reset(); portraitImageOffsetX.reset(); portraitImageOffsetY.reset(); nameColors.clear(); filterTemplates.clear();
+                deathImageScale.reset(); deathImageOffsetX.reset(); deathImageOffsetY.reset(); portraitImageOffsetX.reset(); portraitImageOffsetY.reset(); nameColors.clear(); filterTemplates.clear(); cardNameColor.reset();
         // 滤镜模板区块（之前漏了：主界面「恢复默认」不会重置这些）
         filterEnabled.reset(); filterName.reset(); filterAlpha.reset(); filterBlend.reset();
                 filterTint.reset(); filterBrightness.reset(); filterContrast.reset();

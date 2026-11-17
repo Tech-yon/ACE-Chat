@@ -447,6 +447,20 @@ public class CardStudioScreen extends Screen {
 
         sectionLabel("名字颜色（角色卡）");
         addColorRow("默认名字颜色", CommsConfig.chatNameColor);
+
+        // 本卡默认名字颜色：不用给玩家加条目，套用到这张卡时就用它（演出也生效）。
+        Integer ownColor = CommsConfig.cardNameColorArgb();
+        int ownShown = ownColor == null ? 0xFFFFFFFF : ownColor;
+        addButton("本卡名字颜色：" + (ownColor == null ? "跟随全局" : String.format("#%06X", ownShown & 0xFFFFFF)),
+                fieldX(), this.cursorY, Math.max(80, fieldW() - 52), () ->
+                        openColor(ownShown, CommsConfig::setCardNameColorArgb));
+        addButton("清除", fieldX() + fieldW() - 46, this.cursorY, 46, () -> {
+            CommsConfig.clearCardNameColor();
+            CommsConfig.save();
+            this.layoutPage();
+        });
+        this.cursorY += ROW;
+
         // 符号颜色不再单独设置：统一跟随名字颜色（HUD / 原版回放 / 注入历史都同一套）
         Button symbolInfo = Button.builder(Component.literal("符号颜色：跟随名字颜色（不单独设置）"), b -> { })
                 .bounds(fieldX(), this.cursorY, fieldW(), 16).build();

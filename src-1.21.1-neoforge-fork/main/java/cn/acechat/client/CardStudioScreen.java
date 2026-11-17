@@ -589,6 +589,13 @@ public class CardStudioScreen extends Screen {
         addToggleRowRaw("边框", CommsConfig.chatBorderEnabled);
         addColorRow("边框颜色", CommsConfig.chatBorderColor);
         addSliderRow("边框粗细", CommsConfig.chatBorderThickness, 0, 2, "");
+        String[] textEffects = {"原版阴影", "描边", "无"};
+        addCycleRow("文字效果", textEffects[Math.max(0, Math.min(2, CommsConfig.chatTextEffect.get()))], () -> {
+            CommsConfig.chatTextEffect.set((CommsConfig.chatTextEffect.get() + 1) % 3);
+            CommsConfig.save();
+            this.layoutPage();
+        });
+        addColorRow("描边颜色", CommsConfig.chatTextOutlineColor);
         addSliderRowDouble("单条停留", CommsConfig.lineHoldSeconds, 0.5, 60.0);
         addSliderRowDouble("停留下限", CommsConfig.holdMinSeconds, 0.0, 5.0);
         addSliderRowDouble("停留上限", CommsConfig.holdMaxSeconds, 1.0, 15.0);

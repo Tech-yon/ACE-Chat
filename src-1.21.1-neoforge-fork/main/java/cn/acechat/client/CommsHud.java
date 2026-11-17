@@ -417,12 +417,43 @@ public final class CommsHud {
       // （旧代码是每行各自居中 —— 短行被推进去，看起来就是「名字居中、<> 和正文错位」。）
       // 每一行各自居中：名字一行居中、正文各行居中（<<< / >>> 紧贴正文两端）。
       int y = top + CommsConfig.chatPaddingY.get();
+      int textEffect = CommsConfig.chatTextEffect.get();
+      int outlineColor = CommsConfig.chatTextOutlineColor.get();
       for (FormattedCharSequence line : lines) {
          int lineWidth = font.width(line);
          int lineLeft = left + Math.max(0, (width - lineWidth) / 2);
-         graphics.drawString(font, line, lineLeft, y, TEXT_MAIN, true);
+         drawTextLine(graphics, font, line, lineLeft, y, textEffect, outlineColor);
          y += LINE_HEIGHT;
       }
+   }
+
+   /** 聊天文字效果：0=原版阴影，1=描边，2=无。描边用同一条文本重绘 4 个方向，只换颜色。 */
+   private static void drawTextLine(GuiGraphics graphics, Font font, FormattedCharSequence line,
+                                    int x, int y, int effect, int outlineColor) {
+      if (effect == 2) {
+         graphics.drawString(font, line, x, y, TEXT_MAIN, false);
+         return;
+      }
+      if (effect == 0) {
+         graphics.drawString(font, line, x, y, TEXT_MAIN, true);
+         return;
+      }
+      FormattedCharSequence outline = withSolidColor(line, outlineColor);
+      graphics.drawString(font, outline, x - 1, y, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x + 1, y, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x, y - 1, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x, y + 1, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x - 1, y - 1, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x + 1, y - 1, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x - 1, y + 1, TEXT_MAIN, false);
+      graphics.drawString(font, outline, x + 1, y + 1, TEXT_MAIN, false);
+      graphics.drawString(font, line, x, y, TEXT_MAIN, false);
+   }
+
+   /** 把整行的每个字形都强制成同一种颜色（用于描边层）。 */
+   private static FormattedCharSequence withSolidColor(FormattedCharSequence source, int argb) {
+      Style style = Style.EMPTY.withColor(TextColor.fromRgb(argb & 0xFFFFFF));
+      return sink -> source.accept((index, original, codePoint) -> sink.accept(index, style, codePoint));
    }
 
    /**

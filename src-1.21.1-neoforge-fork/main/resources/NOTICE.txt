@@ -1,0 +1,19 @@
+ACE Chat (SPEC-ACE Chat 分支同源)
+版权所有 (C) 2026 ACE Chat 作者
+
+本模组以 GNU 通用公共许可证第 3 版（或更高版本）发布：
+    SPDX-License-Identifier: GPL-3.0-or-later
+完整协议见同目录的 LICENSE 与 LICENSES/GPL-3.0.txt。
+
+你可以自由使用、修改、再分发本模组，包括用于收费整合包与商业服务器，
+但必须满足 GPL-3.0 的条件 —— 最关键的几条：
+  1. 保留本版权声明与许可证声明（不得删除或修改作者信息）；
+  2. 分发本模组（包括放进整合包）时，必须同时提供完整对应源码
+     （通常给出源码仓库链接即可，或随包附带源码）；
+  3. 如果你修改了本模组并对外分发，修改版也必须以 GPL-3.0-or-later 开源；
+  4. 不得对本模组附加额外限制。
+
+第三方组件：
+  * JLayer 1.0.1（MP3 解码，作者 JavaZOOM，https://www.javazoom.net/javalayer/javalayer.html）
+    以 GNU 宽通用公共许可证第 2.1 版（LGPL-2.1）发布，
+    完整协议见 LICENSES/JLayer-LGPL-2.1.txt。

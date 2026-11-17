@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="GPL-3.0-or-later"
+issueTrackerURL="https://github.com/Tech-yon/ACE-Chat"
+
+[[mods]]
+modId="acechat"
+version="${version}"
+displayName="ACE Chat · SACS-1.21.1-Neoforge-fork"
+authors="Tech-yon, AutoMods"
+description='''玩家通讯 HUD：顶部聊天轮播 + 右上形象框（皮肤 / 自定义立绘）、自定义通讯音效、滤镜与调色。
+本包为 Minecraft 1.21.1 + NeoForge 21.1.x 适配版。'''
+
+[[dependencies.acechat]]
+modId="neoforge"
+type="required"
+versionRange="[21.1,)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.acechat]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.22)"
+ordering="NONE"
+side="CLIENT"

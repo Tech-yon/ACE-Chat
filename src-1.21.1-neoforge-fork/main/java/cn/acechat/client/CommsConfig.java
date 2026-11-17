@@ -893,6 +893,20 @@ public final class CommsConfig {
         }
     }
 
+    /** 当前内存里实际套用的卡（渲染期可能是说话人/预览的卡，不一定是 activeCard）。 */
+    public static String appliedCardName() {
+        return appliedCard;
+    }
+
+    /** 打开编辑界面时强制回到正在编辑的卡，避免沿用渲染期临时套用的别人的卡。 */
+    public static void applyCardForEditing(String cardName) {
+        if (cardName == null || cardName.isBlank()) {
+            return;
+        }
+        appliedCard = cardName;
+        applyCard(cardName);
+    }
+
     /** 手动选中一张卡（界面里点击时用）。 */
     public static void selectCard(String cardName) {
         if (previewing()) {

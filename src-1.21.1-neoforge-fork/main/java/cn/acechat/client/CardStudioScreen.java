@@ -119,6 +119,11 @@ public class CardStudioScreen extends Screen {
         if (this.selected == null || this.selected.isBlank() || !PlayerCards.exists(this.selected)) {
             this.selected = CommsConfig.currentCard();
         }
+        // 打开工坊时强制套用“正在编辑的卡”：渲染期可能临时套用了说话人的卡，
+        // 否则会出现标题是自己的卡、文字元素却是别人卡的情况（v0.1.3.6）。
+        if (!this.selected.equals(CommsConfig.appliedCardName())) {
+            CommsConfig.applyCardForEditing(this.selected);
+        }
         reloadLists();
         readCharacter();
 

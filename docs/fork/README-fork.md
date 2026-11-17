@@ -3,8 +3,8 @@
 > 与稳定版 `SPEC-SACS-v0.032-neoforge` **同一套逻辑、同一套数据**，只重做了「角色卡编辑」界面。
 > modId 仍是 `acechat`，**不能和稳定版同时放进 mods**。
 
-- 当前版本：`0.1.3.5`
-- 当前 jar：`1,434,698 字节 / SHA256 DC3D725E004FE43EF9D350559464BA73B1DCFC6BF2027152B9F2AE95D543B40E`（构建目录，待安装）
+- 当前版本：`0.1.3.6`
+- 当前 jar：`1,434,795 字节 / SHA256 F52058B4A276C671A1622B928F9DAD55A1D736FA58DB66B974DD5EF1E6B6E913`（构建目录，待安装）
 - 源码：`_r9work/SACS-1.21.1-Neoforge-fork`
 - 构建：`_build/SACS-1.21.1-Neoforge-fork`
 

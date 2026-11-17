@@ -7,6 +7,8 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.List;
  * </pre>
  */
 public class CardStudioScreen extends Screen {
+    private static final Logger LOGGER = LoggerFactory.getLogger("acechat");
     private static final int TOP = 26;
     private static final int BOTTOM = 16;
     private static final int ROW = 22;
@@ -69,6 +72,13 @@ public class CardStudioScreen extends Screen {
     /** 取色拖动期间只改进内存，松手/收起时统一写盘一次。 */
     private boolean colorDirty;
     private EditBox newCardBox;
+    /** 剧本页：工程名输入框 / 当前选中工程 / 操作结果提示。 */
+    private EditBox stageNameBox;
+    private String stageNameInput = "";
+    private String stageSelected = "";
+    private String stageStatus = "";
+    private String stageDeleteTarget = "";
+    private long stageDeleteAt;
 
     public CardStudioScreen(Screen parent) {
         super(Component.literal("角色卡工坊"));
@@ -134,6 +144,10 @@ public class CardStudioScreen extends Screen {
         }
         this.miniX = 10 + (availW - this.miniW) / 2;
         this.miniY = areaTop + (availH - this.miniH) / 2;
+
+        // 排查用：README 里让看的就是这一行（尺寸 + 预览区 + 屏幕示意）。
+        LOGGER.info("[acechat] 卡工坊已打开（尺寸 {}×{}，预览区 {}×{}，屏幕示意 {}×{}）",
+                this.width, this.height, this.previewW, this.previewH, this.miniW, this.miniH);
 
         this.contentTop = TOP + 46;
         this.contentBottom = this.height - BOTTOM - 2;
@@ -315,6 +329,28 @@ public class CardStudioScreen extends Screen {
         addSliderRow("面板透明", CommsConfig.portraitPanelAlpha, 0, 100, "");
         addColorRow("边框颜色", CommsConfig.portraitBorderColor);
         addSliderRow("边框粗细", CommsConfig.portraitBorderThickness, 0, 2, "");
+
+        sectionLabel("死亡覆盖");
+        addToggleRowRaw("启用死亡覆盖", CommsConfig.deathOverlayEnabled);
+        boolean noSignal = DeathPortraits.PRESET_NO_SIGN.equals(CommsConfig.deathPreset.get());
+        addCycleRow("预设", noSignal ? "NO SIGN（内置）" : "只用 deaths 目录文件", () -> {
+            CommsConfig.deathPreset.set(noSignal ? "" : DeathPortraits.PRESET_NO_SIGN);
+            DeathPortraits.clearCache();
+            CommsConfig.save();
+            this.layoutPage();
+        });
+        addSliderRow("最大尺寸", CommsConfig.deathImageMaxSize, 64, 1024, " px");
+        addSliderRow("覆盖缩放", CommsConfig.deathImageScale, 20, 400, " %");
+        addSliderRow("覆盖 X 偏移", CommsConfig.deathImageOffsetX, -200, 200, "");
+        addSliderRow("覆盖 Y 偏移", CommsConfig.deathImageOffsetY, -200, 200, "");
+        addButton("打开死亡图目录", fieldX(), this.cursorY, fieldW(), () -> {
+            try {
+                net.minecraft.Util.getPlatform().openUri(DeathPortraits.deathsDir().toUri().toString());
+            } catch (RuntimeException ignored) {
+                // 打不开就算了
+            }
+        });
+        this.cursorY += ROW;
     }
 
     private void textPage() {
@@ -631,7 +667,7 @@ public class CardStudioScreen extends Screen {
         this.cursorY += ROW;
     }
 
-    /** 剧本页：列出全部工程，点一个直接进画布。 */
+    /** 剧本页：工程列表 + 新建/打开/复制/重命名/删除/导出/导入/目录。 */
     private void stagePage() {
         List<String> projects = new ArrayList<>();
         try (var stream = java.nio.file.Files.list(StageScripts.dir())) {
@@ -641,24 +677,184 @@ public class CardStudioScreen extends Screen {
         } catch (Exception ignored) {
             // 没有工程
         }
+
+        sectionLabel("工程");
+        EditBox nameBox = new EditBox(this.font, fieldX(), this.cursorY, fieldW(), 16, Component.literal("工程名"));
+        nameBox.setMaxLength(64);
+        nameBox.setValue(this.stageNameInput);
+        nameBox.setResponder(value -> this.stageNameInput = value);
+        addWidget(nameBox);
+        this.stageNameBox = nameBox;
+        this.cursorY += ROW;
+
+        int bw = Math.max(56, (fieldW() - 18) / 4);
+        String[] actions1 = {"新建", "打开", "复制", "重命名"};
+        for (int i = 0; i < actions1.length; i++) {
+            final String action = actions1[i];
+            addButton(action, fieldX() + i * (bw + 6), this.cursorY, bw, () -> stageAction(action));
+        }
+        this.cursorY += ROW;
+
+        String deleteLabel = this.stageDeleteTarget.equals(this.stageSelected)
+                && !this.stageSelected.isEmpty()
+                && System.currentTimeMillis() - this.stageDeleteAt < 5000 ? "确认删除" : "删除";
+        String[] actions2 = {deleteLabel, "导出", "导入", "目录"};
+        for (int i = 0; i < actions2.length; i++) {
+            final String action = i == 0 ? "删除" : actions2[i];
+            addButton(actions2[i], fieldX() + i * (bw + 6), this.cursorY, bw, () -> stageAction(action));
+        }
+        this.cursorY += ROW;
+
+        if (!this.stageStatus.isBlank()) {
+            sectionLabel("状态：" + this.stageStatus);
+        }
+
+        sectionLabel("工程列表");
         if (projects.isEmpty()) {
-            sectionLabel("（没有工程）");
+            sectionLabel("（没有工程，输入名字后点「新建」）");
             return;
         }
+        int openW = 44;
         for (String project : projects) {
             final String name = project;
-            addButton("剧本：" + name, fieldX(), this.cursorY, fieldW(), () ->
-                    Minecraft.getInstance().setScreen(new StageCanvasScreen(this, name)));
+            String label = (name.equals(this.stageSelected) ? "▶ " : "剧本：") + name;
+            addButton(label, fieldX(), this.cursorY, Math.max(80, fieldW() - openW - 6), () -> {
+                this.stageSelected = name;
+                this.stageNameInput = name;
+                this.stageStatus = "";
+                this.layoutPage();
+            });
+            addButton("打开", fieldX() + fieldW() - openW, this.cursorY, openW, () -> openStage(name));
             this.cursorY += ROW;
         }
-        addButton("打开剧本目录", fieldX(), this.cursorY + 6, fieldW(), () -> {
-            try {
-                net.minecraft.Util.getPlatform().openUri(StageScripts.dir().toUri().toString());
-            } catch (RuntimeException ignored) {
-                // 打不开就算了
-            }
-        });
+        addButton("打开剧本目录", fieldX(), this.cursorY + 4, fieldW(), this::openStageFolder);
         this.cursorY += ROW;
+    }
+
+    private void stageAction(String action) {
+        String name = this.stageNameInput == null ? "" : this.stageNameInput.trim();
+        this.stageStatus = "";
+        switch (action) {
+            case "新建" -> {
+                if (StageScripts.createDefault(name)) {
+                    this.stageSelected = name;
+                    openStage(name);
+                    return;
+                }
+                this.stageStatus = "新建失败（名字为空或已存在）";
+            }
+            case "打开" -> {
+                openStage(name.isEmpty() ? this.stageSelected : name);
+                return;
+            }
+            case "复制" -> {
+                if (this.stageSelected.isEmpty()) {
+                    this.stageStatus = "先在列表里选一个工程";
+                } else if (StageScripts.copy(this.stageSelected, name)) {
+                    this.stageSelected = name;
+                    this.stageStatus = "已复制为 " + name;
+                } else {
+                    this.stageStatus = "复制失败（名字为空/已存在）";
+                }
+            }
+            case "重命名" -> {
+                if (this.stageSelected.isEmpty()) {
+                    this.stageStatus = "先在列表里选一个工程";
+                } else if (StageScripts.rename(this.stageSelected, name)) {
+                    this.stageStatus = "已重命名为 " + name;
+                    this.stageSelected = name;
+                } else {
+                    this.stageStatus = "重命名失败（名字为空/已存在）";
+                }
+            }
+            case "删除" -> {
+                if (this.stageSelected.isEmpty()) {
+                    this.stageStatus = "先在列表里选一个工程";
+                } else if (this.stageDeleteTarget.equals(this.stageSelected)
+                        && System.currentTimeMillis() - this.stageDeleteAt < 5000) {
+                    if (StageScripts.delete(this.stageSelected)) {
+                        this.stageStatus = "已删除 " + this.stageSelected;
+                        this.stageSelected = "";
+                        this.stageNameInput = "";
+                        this.stageDeleteTarget = "";
+                    } else {
+                        this.stageStatus = "删除失败";
+                    }
+                } else {
+                    this.stageDeleteTarget = this.stageSelected;
+                    this.stageDeleteAt = System.currentTimeMillis();
+                    this.stageStatus = "再点一次「确认删除」：" + this.stageSelected;
+                }
+            }
+            case "导出" -> {
+                if (this.stageSelected.isEmpty()) {
+                    this.stageStatus = "先选一个工程";
+                } else {
+                    java.nio.file.Path path = StageScripts.export(this.stageSelected, AceChatFolders.exportDir());
+                    this.stageStatus = path == null ? "导出失败" : "已导出到 " + path.getFileName();
+                }
+            }
+            case "导入" -> {
+                importStageDialog();
+                return;
+            }
+            default -> openStageFolder();
+        }
+        this.layoutPage();
+    }
+
+    private void openStage(String name) {
+        String project = name == null ? "" : name.trim();
+        if (project.isEmpty()) {
+            this.stageStatus = "先写工程名或选一个工程";
+            this.layoutPage();
+            return;
+        }
+        if (!java.nio.file.Files.isRegularFile(StageScripts.dir().resolve(project + ".json"))
+                && !StageScripts.createDefault(project)) {
+            this.stageStatus = "打开失败：工程不存在且无法新建";
+            this.layoutPage();
+            return;
+        }
+        this.stageSelected = project;
+        Minecraft.getInstance().setScreen(new StageCanvasScreen(this, project));
+    }
+
+    private void openStageFolder() {
+        try {
+            net.minecraft.Util.getPlatform().openUri(StageScripts.dir().toUri().toString());
+        } catch (RuntimeException ignored) {
+            // 打不开就算了
+        }
+    }
+
+    /** 从 export/ 里挑一个 json 导入成新工程。 */
+    private void importStageDialog() {
+        List<String> files = new ArrayList<>();
+        try (var stream = java.nio.file.Files.list(AceChatFolders.exportDir())) {
+            stream.filter(path -> path.getFileName().toString().toLowerCase().endsWith(".json"))
+                    .sorted()
+                    .forEach(path -> files.add(path.getFileName().toString()));
+        } catch (Exception ignored) {
+            // 没有导出目录
+        }
+        if (files.isEmpty()) {
+            this.stageStatus = "导出目录里没有工程文件";
+            this.layoutPage();
+            return;
+        }
+        Minecraft.getInstance().setScreen(new ChoiceListScreen(this, "导入工程（来自 export/）", files, picked -> {
+            String base = picked.toLowerCase().endsWith(".json")
+                    ? picked.substring(0, picked.length() - 5) : picked;
+            if (StageScripts.importFrom(base, AceChatFolders.exportDir())) {
+                this.stageSelected = base;
+                this.stageNameInput = base;
+                this.stageStatus = "已导入 " + base;
+            } else {
+                this.stageStatus = "导入失败：" + base;
+            }
+            this.init();
+        }));
     }
 
     // ───────────────────────── 音效预设 ─────────────────────────

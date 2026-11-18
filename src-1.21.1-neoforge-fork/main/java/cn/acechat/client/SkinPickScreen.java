@@ -85,6 +85,11 @@ public class SkinPickScreen extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 不调用原版模糊：1.21 的 blur 会把我们自己画的行一起糊掉（表现为整屏模糊、看不清）
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.renderBackground(graphics, mouseX, mouseY, partialTick);
         graphics.fill(0, 0, this.width, this.height, 0xE0101014);

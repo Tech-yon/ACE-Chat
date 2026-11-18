@@ -11,6 +11,7 @@
 |---|---|
 | `src-1.20.1-forge/` | 1.20.1 Forge 标准版 |
 | `src-1.21.1-neoforge/` | 1.21.1 NeoForge 标准版 |
+| `src-1.21.1-neoforge-fork/` | **卡工坊 UI 版（fork）**：1.21.1 NeoForge，重做角色卡编辑界面；当前 `0.1.3.9`，详见 [docs/fork/README-fork.md](docs/fork/README-fork.md) |
 | `src-1.20.1-forge-spec/` | **SPEC 分支**：对 NoChatReports 等"会把玩家聊天改写成系统消息"的模组的适配版 |
 | `docs/` | 对外文档：模组介绍（长版 / 一段式）、开源声明、三个平台的《功能说明》、视频简介 |
 
@@ -35,3 +36,11 @@
 ## 反馈
 
 请通过仓库 Issues 或视频评论区反馈；附上 `logs/latest.log` 和所用整合包名字会更快定位问题。
+
+## 卡工坊 fork（1.21.1 NeoForge）
+
+- 源码：`src-1.21.1-neoforge-fork/main/`
+- 文档：`docs/fork/`（README、项目大纲、交接、影响路径、源码核对）
+- 当前版本：`0.1.3.9`
+- 更新记录：[`docs/fork/版本更新记录.md`](docs/fork/版本更新记录.md)
+- 说明：与 1.21.1 标准版共用同一套 `ACE_config` 数据，modId 仍为 `acechat`，**不能和标准版同时放进 mods**。

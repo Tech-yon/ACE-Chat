@@ -300,7 +300,7 @@ public class CardStudioScreen extends Screen {
             writeCharacter();
         });
         addCycleRow("皮肤", this.skinRef.isBlank() ? "（未指定）" : this.skinRef, () ->
-                Minecraft.getInstance().setScreen(new ChoiceListScreen(this, "选择皮肤", this.skins, value -> {
+                Minecraft.getInstance().setScreen(new SkinPickScreen(this, this.skins, this.skinRef, value -> {
                     this.skinRef = value;
                     writeCharacter();
                     this.init();

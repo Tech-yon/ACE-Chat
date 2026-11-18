@@ -41,6 +41,6 @@
 
 - 源码：`src-1.21.1-neoforge-fork/main/`
 - 文档：`docs/fork/`（README、项目大纲、交接、影响路径、源码核对）
-- 当前版本：`0.1.3.11`
+- 当前版本：`0.1.3.12`
 - 更新记录：[`docs/fork/版本更新记录.md`](docs/fork/版本更新记录.md)
 - 说明：与 1.21.1 标准版共用同一套 `ACE_config` 数据，modId 仍为 `acechat`，**不能和标准版同时放进 mods**。

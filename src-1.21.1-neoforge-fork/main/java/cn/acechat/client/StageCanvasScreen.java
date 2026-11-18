@@ -161,7 +161,7 @@ public class StageCanvasScreen extends Screen {
                 case GATE -> "逻辑门：" + ("any".equals(gate) ? "或" : "与");
                 case DIALOGUE -> "对话：" + (speaker.isBlank() ? "（未选卡）" : speaker);
                 case INTERVAL -> "时间：" + fmt(hold) + " / " + fmt(gap);
-                case END -> "结束：" + (repeat ? "重复" : "截止");
+                case END -> "结束：" + (repeat ? "可再次触发" : "只触发一次");
             };
         }
 
@@ -173,7 +173,7 @@ public class StageCanvasScreen extends Screen {
                 case GATE -> "连接多个触发条件";
                 case DIALOGUE -> trim(text, 12);
                 case INTERVAL -> "持续 " + fmt(hold) + " · 停滞 " + fmt(gap);
-                case END -> (repeat ? "可重复 · 冷却 " + Math.round(cooldownSeconds) + "s" : "只触发一次")
+                case END -> (repeat ? "可再次触发 · 冷却 " + Math.round(cooldownSeconds) + "s（从演出结束算）" : "只触发一次")
                         + " · " + broadcastText();
             };
         }
@@ -1546,7 +1546,7 @@ public class StageCanvasScreen extends Screen {
             }
             case END -> {
                 int row = 0;
-                field(graphics, x, rowY + row * ROW_H, "效果", node.repeat ? "重复" : "截止");
+                field(graphics, x, rowY + row * ROW_H, "效果", node.repeat ? "可再次触发" : "只触发一次");
                 row++;
                 if (node.repeat) {
                     graphics.drawString(this.font, "冷却", x, rowY + row * ROW_H, MUTED, false);

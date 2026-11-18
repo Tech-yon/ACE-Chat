@@ -35,10 +35,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -76,6 +78,11 @@ public final class ServerStageTriggers {
     /** 每条触发器各自的播放组（画布保存时写入 when.triggers[i].group）。 */
     private static final Map<String, TriggerGroups> TRIGGER_GROUPS = new HashMap<>();
     private static final Deque<StageEngine.Signal> BUFFER = new ArrayDeque<>();
+    /**
+     * 每条规则已经“用掉”的一次性事件信号：同一个击杀/聊天/死亡事件只允许触发同一条规则一次。
+     * 周期信号（tick.every / player.lowHealth）不消耗，仍然可以按冷却重复。
+     */
+    private static final Map<StageEngine.Signal, Set<String>> CONSUMED = new java.util.IdentityHashMap<>();
     private static final Random RNG = new Random();
     private static final Map<String, String> LAST_PICK = new HashMap<>();
     private static final Map<String, Integer> CYCLE = new HashMap<>();
@@ -104,7 +111,7 @@ public final class ServerStageTriggers {
         ensureState(server);
         refreshProjects(now);
         while (!BUFFER.isEmpty() && now - BUFFER.peekFirst().tick() > MAX_BUFFER_WINDOW) {
-            BUFFER.removeFirst();
+            CONSUMED.remove(BUFFER.removeFirst());
         }
         if (now % POLL_TICKS == 0) {
             pollSignals(server, now);
@@ -131,6 +138,7 @@ public final class ServerStageTriggers {
         CURRENT.clear();
         state = null;
         BUFFER.clear();
+        CONSUMED.clear();
         lastSave = 0L;
         lastScan = -1L;
     }
@@ -468,17 +476,32 @@ public final class ServerStageTriggers {
                 } catch (RuntimeException e) {
                     continue;
                 }
-                if (cond == null || !StageEngine.matches(cond, snapshot, now, rule.window())) {
+                String key = entry.getKey() + "::" + rule.id();
+                // 已经用掉的一次性信号，对这条规则不再参与匹配（避免每个 tick 反复重播）
+                List<StageEngine.Signal> usable = new ArrayList<>(snapshot.size());
+                for (StageEngine.Signal candidate : snapshot) {
+                    if (!consumedBy(candidate, key)) {
+                        usable.add(candidate);
+                    }
+                }
+                if (cond == null || !StageEngine.matches(cond, usable, now, rule.window())) {
                     continue;
                 }
-                String key = entry.getKey() + "::" + rule.id();
                 if (!state.allowed(key, rule.once(), signal.playerName(), now, rule.cooldown())) {
                     continue;
                 }
-                if (dispatch(server, signal, project, rule, key, now, matchedGroups(rule, snapshot, now))) {
+                if (dispatch(server, signal, project, rule, key, now, matchedGroups(rule, usable, now))) {
                     sent++;
+                    // 一次性事件（击杀/受伤/聊天/进出服…）只允许触发这条规则一次；
+                    // tick.every / lowHealth 这种周期信号不消耗，仍按冷却控制。
+                    for (StageEngine.Signal used : usable) {
+                        if (!isPeriodicEvent(used.event())) {
+                            CONSUMED.computeIfAbsent(used, ignored -> new HashSet<>()).add(key);
+                        }
+                    }
                     if ("acechat.manual".equals(signal.event())) {
                         BUFFER.remove(signal);   // 一次性：用完即消
+                        CONSUMED.remove(signal);
                     }
                     if (sent >= MAX_SENDS_PER_SIGNAL) {
                         return;
@@ -486,6 +509,17 @@ public final class ServerStageTriggers {
                 }
             }
         }
+    }
+
+    /** 这条规则是否已经用掉了这个信号。 */
+    private static boolean consumedBy(StageEngine.Signal signal, String key) {
+        Set<String> used = CONSUMED.get(signal);
+        return used != null && used.contains(key);
+    }
+
+    /** 周期信号：可以按 cooldown 反复触发；其余（击杀/受伤/聊天/进退服…）对同一条规则只用一次。 */
+    private static boolean isPeriodicEvent(String event) {
+        return "tick.every".equalsIgnoreCase(event) || "player.lowHealth".equalsIgnoreCase(event);
     }
 
     private static boolean dispatch(MinecraftServer server, StageEngine.Signal signal,

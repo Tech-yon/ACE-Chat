@@ -140,8 +140,10 @@ public final class PortraitFiles {
             DynamicTexture texture = new DynamicTexture(image);
             ResourceLocation location = ResourceLocation.fromNamespaceAndPath("acechat", "portraits/" + name.replace('.', '_').toLowerCase(Locale.ROOT));
             minecraft.getTextureManager().register(location, texture);
-            LOADED.put(name, location);
+            LOADED.put(key, location);
             SIZES.put(name, new int[]{width, height});
+            LAST_BAKE.put(name, now);
+            LAST_TEXTURE.put(name, location);
             return location;
         } catch (Exception error) {
             if (!warned) {

@@ -38,7 +38,10 @@ public final class PortraitGrade {
     private static final Set<String> PENDING = new HashSet<>();
     /** 失败记录 + 时间戳：过几秒允许重试（以前永久拉黑，只能靠改一次调色参数才能恢复）。 */
     private static final Map<String, Long> FAILED = new HashMap<>();
+    /** 每次开始烘焙的时间：用于兜底重启（线程异常/回调丢失时不会永久卡在“烘焙中”）。 */
+    private static final Map<String, Long> STARTED = new HashMap<>();
     private static final long RETRY_MS = 5000L;
+    private static final long STUCK_MS = 15000L;
     private static boolean logged;
 
     private PortraitGrade() {
@@ -49,6 +52,7 @@ public final class PortraitGrade {
         CACHE.clear();
         PENDING.clear();
         FAILED.clear();
+        STARTED.clear();
     }
 
     /**
@@ -68,7 +72,15 @@ public final class PortraitGrade {
         }
 
         Long failedAt = FAILED.get(key);
-        if (failedAt != null && System.currentTimeMillis() - failedAt < RETRY_MS) {
+        long now = System.currentTimeMillis();
+        Long started = STARTED.get(key);
+        if (started != null && now - started > STUCK_MS) {
+            // 线程异常/回调丢失：强制重启，不要等用户去动滑条
+            PENDING.remove(key);
+            STARTED.remove(key);
+            FAILED.remove(key);
+        }
+        if (failedAt != null && now - failedAt < RETRY_MS) {
             return original;
         }
         if (PENDING.add(key)) {
@@ -92,35 +104,56 @@ public final class PortraitGrade {
         int light = CommsConfig.duotoneLight.get();
         int amount = CommsConfig.duotoneAmount.get();
 
+        STARTED.put(key, System.currentTimeMillis());
         Thread thread = new Thread(() -> {
-            // 关键：先读「正在画的那张皮肤」（卡皮肤 / 预览皮肤 / 立绘都可能是它），
-            // 不能先去按玩家 profile 下载——否则卡皮肤/预览永远会被玩家自己的皮肤替换掉。
-            NativeImage image = fromLoadedTexture(minecraft, location);
-            if (image == null) {
-                image = fromResourceManager(minecraft, location);
-            }
-            if (image == null) {
-                image = download(minecraft, profile, name);
-            }
-
-            if (image == null) {
-                FAILED.put(key, System.currentTimeMillis());
-                PENDING.remove(key);
-                if (!logged) {
-                    logged = true;
-                    LOGGER.warn("[acechat] 取不到皮肤像素，调色暂不可用（叠加滤镜不受影响）");
+            NativeImage image = null;
+            try {
+                // 关键：先读「正在画的那张皮肤」（卡皮肤 / 预览皮肤 / 立绘都可能是它），
+                // 不能先去按玩家 profile 下载——否则卡皮肤/预览永远会被玩家自己的皮肤替换掉。
+                image = fromLoadedTexture(minecraft, location);
+                if (image == null) {
+                    image = fromResourceManager(minecraft, location);
+                }
+                if (image == null) {
+                    image = download(minecraft, profile, name);
                 }
 
-                return;
-            }
+                if (image == null) {
+                    failBake(key, id, null);
+                    return;
+                }
 
-            apply(image, brightness, contrast, saturation, hue, duotone, dark, light, amount);
-            NativeImage result = image;
-            String textureKey = Integer.toHexString(key.hashCode());
-            Minecraft.getInstance().execute(() -> register(textureKey, result, key));
+                apply(image, brightness, contrast, saturation, hue, duotone, dark, light, amount);
+                NativeImage result = image;
+                image = null;   // 所有权交给渲染线程注册
+                String textureKey = Integer.toHexString(key.hashCode());
+                Minecraft.getInstance().execute(() -> register(textureKey, result, key));
+            } catch (Throwable error) {
+                if (image != null) {
+                    image.close();
+                }
+                failBake(key, id, error);
+            }
         }, "acechat-grade");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    /** 失败收尾：清掉“烘焙中”标记、记录重试时间，并让下次重新解析皮肤（纹理可能已经换了位置/被释放）。 */
+    private static void failBake(String key, UUID sender, Throwable error) {
+        PENDING.remove(key);
+        STARTED.remove(key);
+        FAILED.put(key, System.currentTimeMillis());
+        if (error != null) {
+            LOGGER.warn("[acechat] 调色烘焙异常（稍后重试）", error);
+        } else if (!logged) {
+            logged = true;
+            LOGGER.warn("[acechat] 取不到皮肤像素，调色暂不可用（叠加滤镜不受影响）");
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft != null && sender != null) {
+            minecraft.execute(() -> PortraitSource.invalidate(sender));
+        }
     }
 
     private static void register(String textureKey, NativeImage image, String cacheKey) {
@@ -129,9 +162,13 @@ public final class PortraitGrade {
             ResourceLocation location = ResourceLocation.fromNamespaceAndPath("acechat", "graded/" + textureKey);
             Minecraft.getInstance().getTextureManager().register(location, texture);
             CACHE.put(cacheKey, location);
+            PENDING.remove(cacheKey);
+            STARTED.remove(cacheKey);
+            FAILED.remove(cacheKey);
         } catch (RuntimeException | LinkageError error) {
             FAILED.put(cacheKey, System.currentTimeMillis());
             PENDING.remove(cacheKey);
+            STARTED.remove(cacheKey);
             image.close();
             LOGGER.warn("[acechat] 注册调色贴图失败（该皮肤将保持原色）", error);
         }

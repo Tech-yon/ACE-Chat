@@ -312,6 +312,13 @@ public class CardStudioScreen extends Screen {
                     this.init();
                 })));
 
+        addToggleRowRaw("半身像启用", CommsConfig.portraitEnabled);
+        addToggleRowRaw("聊天时只显示文字", CommsConfig.portraitChatHidden);
+        addToggleRowRaw("立绘图片模式（覆盖皮肤）", CommsConfig.portraitUseImage);
+        String artImage = CommsConfig.portraitImageName.get();
+        addCycleRow("立绘图片", artImage == null || artImage.isBlank() ? "（未指定）" : artImage,
+                this::pickPortraitImage);
+
         String skinText = this.skinRef.isBlank() ? "跟随玩家皮肤" : this.skinRef;
         String artText = this.portraitRef.isBlank() ? "未指定" : this.portraitRef;
         String missing = !this.skinRef.isBlank() && !this.skins.contains(this.skinRef)
@@ -649,6 +656,23 @@ public class CardStudioScreen extends Screen {
         addButton("套用模板…", fieldX() + (tbw + 6) * 2, this.cursorY, tbw, this::applyTemplateDialog);
         this.cursorY += ROW;
         addStatusRow();
+    }
+
+    /** 从 portraits 目录选一张全局立绘图片（15/16 的图片模式）。 */
+    private void pickPortraitImage() {
+        List<String> files = PortraitFiles.userFiles();
+        if (files.isEmpty()) {
+            this.actionStatus = "立绘目录里没有 PNG（先放进 ACE_config/portraits）";
+            this.layoutPage();
+            return;
+        }
+        Minecraft.getInstance().setScreen(new ChoiceListScreen(this, "选择立绘图片（全局覆盖）", files, picked -> {
+            CommsConfig.portraitImageName.set(picked);
+            CommsConfig.portraitUseImage.set(true);
+            CommsConfig.save();
+            this.actionStatus = "已选择立绘图片 " + picked;
+            this.init();
+        }));
     }
 
     /** 选一个模板，连同调色/滤镜参数一起套用。 */

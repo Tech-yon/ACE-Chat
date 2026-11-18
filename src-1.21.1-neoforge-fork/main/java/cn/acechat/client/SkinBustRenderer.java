@@ -28,12 +28,14 @@ public final class SkinBustRenderer {
 
       int mode = Math.max(0, Math.min(4, layout));
       if (source.customTexture() != null) {
-         // 自定义立绘：整张按比例居中
-         float scale = Math.min(width / Math.max(1, source.customWidth()), height / Math.max(1, source.customHeight()));
+         // 自定义立绘：按比例居中，再叠加「立绘缩放 / X·Y 偏移」（v0.1.3.10）
+         float userScale = Math.max(0.1F, Math.min(4.0F, CommsConfig.portraitImageScale.get() / 100.0F));
+         float scale = Math.min(width / Math.max(1, source.customWidth()),
+            height / Math.max(1, source.customHeight())) * userScale;
          float drawWidth = Math.max(1, source.customWidth()) * scale;
          float drawHeight = Math.max(1, source.customHeight()) * scale;
-         float left = x + (width - drawWidth) * 0.5F;
-         float top = y + (height - drawHeight) * 0.5F;
+         float left = x + (width - drawWidth) * 0.5F + CommsConfig.portraitImageOffsetX.get();
+         float top = y + (height - drawHeight) * 0.5F + CommsConfig.portraitImageOffsetY.get();
          drawScaled(graphics, source.customTexture(),
             Math.max(1, source.customWidth()), Math.max(1, source.customHeight()),
             left, top, scale, 0, 0, Math.max(1, source.customWidth()), Math.max(1, source.customHeight()), alpha);

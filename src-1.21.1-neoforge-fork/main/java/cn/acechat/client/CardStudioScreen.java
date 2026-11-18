@@ -79,6 +79,11 @@ public class CardStudioScreen extends Screen {
     private String stageStatus = "";
     private String stageDeleteTarget = "";
     private long stageDeleteAt;
+    /** 工坊内一次操作的提示（导入/模板/在线建卡等）。 */
+    private String actionStatus = "";
+    private String filterTemplateInput = "";
+    private boolean nameClearArmed;
+    private long nameClearAt;
 
     public CardStudioScreen(Screen parent) {
         super(Component.literal("角色卡工坊"));
@@ -220,6 +225,8 @@ public class CardStudioScreen extends Screen {
             String label = (index == this.tab ? "◆ " : "") + TABS[i];
             this.addRenderableWidget(Button.builder(Component.literal(label), b -> {
                 this.tab = index;
+                this.actionStatus = "";
+                this.nameClearArmed = false;
                 layoutPage();
             }).bounds(x, y, bw - 2, 15).build());
         }
@@ -304,6 +311,23 @@ public class CardStudioScreen extends Screen {
                     writeCharacter();
                     this.init();
                 })));
+
+        String skinText = this.skinRef.isBlank() ? "跟随玩家皮肤" : this.skinRef;
+        String artText = this.portraitRef.isBlank() ? "未指定" : this.portraitRef;
+        String missing = !this.skinRef.isBlank() && !this.skins.contains(this.skinRef)
+                ? "（皮肤文件未找到）" : "";
+        String artMissing = !this.portraitRef.isBlank() && !this.portraits.contains(this.portraitRef)
+                ? "（立绘文件未找到）" : "";
+        addInfoRow(trim("皮肤：" + skinText + missing + "　立绘：" + artText + artMissing, 70));
+        int dirHalf = Math.max(80, (fieldW() - 6) / 2);
+        addButton("重新扫描立绘目录", fieldX(), this.cursorY, dirHalf, () -> {
+            PortraitFiles.rescan();
+            this.actionStatus = "已重新扫描立绘目录";
+            this.init();
+        });
+        addButton("打开立绘目录", fieldX() + dirHalf + 6, this.cursorY, dirHalf,
+                () -> openPath(PortraitFiles.portraitDir()));
+        this.cursorY += ROW;
     }
 
     private void appearancePage() {
@@ -316,6 +340,9 @@ public class CardStudioScreen extends Screen {
         addToggleRowRaw("照片分隔线", CommsConfig.portraitPhotoDivider);
         addToggleRowRaw("外层皮肤", CommsConfig.portraitOuterLayer);
         addSliderRow("半身像缩放", CommsConfig.portraitBustScale, 40, 150, "");
+        addSliderRow("立绘缩放", CommsConfig.portraitImageScale, 10, 400, " %");
+        addSliderRow("立绘 X", CommsConfig.portraitImageOffsetX, -200, 200, "");
+        addSliderRow("立绘 Y", CommsConfig.portraitImageOffsetY, -200, 200, "");
         addSliderRowDouble("整体缩放", CommsConfig.portraitScale, 0.5, 2.0);
         addSliderRow("宽", CommsConfig.portraitWidth, 80, 300, "");
         addSliderRow("高", CommsConfig.portraitHeight, 90, 340, "");
@@ -509,6 +536,24 @@ public class CardStudioScreen extends Screen {
             });
             this.cursorY += ROW;
         }
+        if (!CommsConfig.nameColors.isEmpty()) {
+            boolean armed = this.nameClearArmed && System.currentTimeMillis() - this.nameClearAt < 5000;
+            addButton(armed ? "再点一次清空全部" : "清空全部名字颜色条目", fieldX(), this.cursorY, fieldW(), () -> {
+                if (armed) {
+                    CommsConfig.nameColors.clear();
+                    CommsConfig.save();
+                    this.nameClearArmed = false;
+                    this.actionStatus = "已清空名字颜色条目";
+                } else {
+                    this.nameClearArmed = true;
+                    this.nameClearAt = System.currentTimeMillis();
+                    this.actionStatus = "再点一次确认清空";
+                }
+                this.layoutPage();
+            });
+            this.cursorY += ROW;
+        }
+        addStatusRow();
     }
 
     private void colorPage() {
@@ -565,6 +610,71 @@ public class CardStudioScreen extends Screen {
         addSliderRow("滤镜对比", CommsConfig.filterContrast, 30, 200, "");
         addSliderRow("滤镜饱和", CommsConfig.filterSaturation, 0, 200, "");
         addSliderRow("滤镜色相", CommsConfig.filterHue, -180, 180, "");
+
+        sectionLabel("滤镜模板");
+        EditBox templateName = new EditBox(this.font, fieldX(), this.cursorY, fieldW(), 16,
+                Component.literal("模板名"));
+        templateName.setMaxLength(48);
+        templateName.setValue(this.filterTemplateInput);
+        templateName.setResponder(value -> this.filterTemplateInput = value);
+        addWidget(templateName);
+        this.cursorY += ROW;
+
+        int tbw = Math.max(70, (fieldW() - 12) / 3);
+        addButton("保存模板", fieldX(), this.cursorY, tbw, () -> {
+            String name = this.filterTemplateInput == null ? "" : this.filterTemplateInput.trim();
+            if (name.isEmpty()) {
+                name = "模板 " + (CommsConfig.filterTemplates.size() + 1);
+            }
+            final String target = name;
+            CommsConfig.filterTemplates.removeIf(t -> t.name != null && t.name.equalsIgnoreCase(target));
+            CommsConfig.filterTemplates.add(CommsConfig.captureTemplate(target));
+            this.filterTemplateInput = target;
+            CommsConfig.save();
+            this.actionStatus = "已保存模板 " + target;
+            this.layoutPage();
+        });
+        addButton("删除模板", fieldX() + tbw + 6, this.cursorY, tbw, () -> {
+            String name = this.filterTemplateInput == null ? "" : this.filterTemplateInput.trim();
+            boolean removed = name.isEmpty() ? false
+                    : CommsConfig.filterTemplates.removeIf(t -> t.name != null && t.name.equalsIgnoreCase(name));
+            if (removed) {
+                CommsConfig.save();
+                this.actionStatus = "已删除模板 " + name;
+            } else {
+                this.actionStatus = "没有找到模板：" + (name.isEmpty() ? "（名字为空）" : name);
+            }
+            this.layoutPage();
+        });
+        addButton("套用模板…", fieldX() + (tbw + 6) * 2, this.cursorY, tbw, this::applyTemplateDialog);
+        this.cursorY += ROW;
+        addStatusRow();
+    }
+
+    /** 选一个模板，连同调色/滤镜参数一起套用。 */
+    private void applyTemplateDialog() {
+        if (CommsConfig.filterTemplates.isEmpty()) {
+            this.actionStatus = "还没有保存过滤镜模板";
+            this.layoutPage();
+            return;
+        }
+        List<String> names = new ArrayList<>();
+        for (CommsConfig.FilterTemplate template : CommsConfig.filterTemplates) {
+            names.add(template.name == null ? "" : template.name);
+        }
+        Minecraft.getInstance().setScreen(new ChoiceListScreen(this, "套用滤镜模板", names, picked -> {
+            for (CommsConfig.FilterTemplate template : CommsConfig.filterTemplates) {
+                if (template.name != null && template.name.equalsIgnoreCase(picked)) {
+                    CommsConfig.applyTemplate(template);
+                    PortraitGrade.invalidate();
+                    CommsConfig.save();
+                    this.filterTemplateInput = picked;
+                    this.actionStatus = "已套用模板 " + picked;
+                    break;
+                }
+            }
+            this.init();
+        }));
     }
 
     private void chatPage() {
@@ -689,6 +799,34 @@ public class CardStudioScreen extends Screen {
         addButton("导出配置", fieldX() + half + 6, this.cursorY, half, () -> CommsConfig.export());
         this.cursorY += ROW;
 
+        sectionLabel("导入 / 目录");
+        addButton("导入角色卡…", fieldX(), this.cursorY, fieldW(), this::importCardDialog);
+        this.cursorY += ROW;
+        addButton("打开角色卡目录", fieldX(), this.cursorY, fieldW(),
+                () -> openPath(PlayerCards.dir()));
+        this.cursorY += ROW;
+
+        List<String> onlinePlayers = PlayerCards.onlinePlayerNames();
+        if (!onlinePlayers.isEmpty()) {
+            sectionLabel("在线玩家（点一下从默认卡建卡）");
+            int shown = Math.min(onlinePlayers.size(), 12);
+            for (int i = 0; i < shown; i++) {
+                String onlineName = onlinePlayers.get(i);
+                boolean hasCard = PlayerCards.exists(onlineName);
+                addButton((hasCard ? "切换到 " : "＋ 建卡 ") + onlineName, fieldX(), this.cursorY, fieldW(), () -> {
+                    if (!hasCard) {
+                        PlayerCards.createFromDefault(onlineName);
+                    }
+                    CommsConfig.selectCard(onlineName);
+                    this.selected = onlineName;
+                    this.actionStatus = (hasCard ? "已切换到 " : "已建卡并切换到 ") + onlineName;
+                    this.init();
+                });
+                this.cursorY += ROW;
+            }
+        }
+        addStatusRow();
+
         addButton("打开配置目录", fieldX(), this.cursorY, fieldW(), () -> {
             try {
                 net.minecraft.Util.getPlatform().openUri(AceChatFolders.rootDir().toUri().toString());
@@ -702,6 +840,37 @@ public class CardStudioScreen extends Screen {
         addButton("旧版配置（对照用）", fieldX(), this.cursorY, fieldW(), () ->
                 Minecraft.getInstance().setScreen(new CommsConfigScreen(this)));
         this.cursorY += ROW;
+    }
+
+    /** 从 export/cards/ 里挑一个 json 导入成角色卡。 */
+    private void importCardDialog() {
+        List<String> files = new ArrayList<>();
+        try (var stream = java.nio.file.Files.list(PlayerCards.exportDir())) {
+            stream.filter(path -> path.getFileName().toString().toLowerCase().endsWith(".json"))
+                    .sorted()
+                    .forEach(path -> files.add(path.getFileName().toString()));
+        } catch (Exception ignored) {
+            // 没有导出目录
+        }
+        if (files.isEmpty()) {
+            this.actionStatus = "导出目录里没有角色卡文件";
+            this.layoutPage();
+            return;
+        }
+        Minecraft.getInstance().setScreen(new ChoiceListScreen(this, "导入角色卡（来自 export/cards）", files, picked -> {
+            String cardName = picked.toLowerCase().endsWith(".json")
+                    ? picked.substring(0, picked.length() - 5) : picked;
+            boolean ok = PlayerCards.importFile(PlayerCards.exportDir().resolve(picked));
+            if (ok) {
+                this.reloadLists();
+                this.selected = cardName;
+                CommsConfig.selectCard(cardName);
+                this.actionStatus = "已导入角色卡 " + cardName;
+            } else {
+                this.actionStatus = "导入失败（同名卡已存在或文件无效）：" + cardName;
+            }
+            this.init();
+        }));
     }
 
     /** 剧本页：工程列表 + 新建/打开/复制/重命名/删除/导出/导入/目录。 */
@@ -973,6 +1142,33 @@ public class CardStudioScreen extends Screen {
 
     private void addButton(String label, int x, int y, int w, Runnable action) {
         addButtonRaw(label, x, y, w, action);
+    }
+
+    /** 只读提示行（灰色按钮样式，点了不做事）。 */
+    private void addInfoRow(String text) {
+        Button info = Button.builder(Component.literal(text), b -> { })
+                .bounds(fieldX(), this.cursorY, fieldW(), 16).build();
+        info.active = false;
+        addWidget(info);
+        this.cursorY += ROW;
+    }
+
+    private void addStatusRow() {
+        if (this.actionStatus == null || this.actionStatus.isBlank()) {
+            return;
+        }
+        addInfoRow(trim(this.actionStatus, 70));
+    }
+
+    private static void openPath(java.nio.file.Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            net.minecraft.Util.getPlatform().openUri(path.toUri().toString());
+        } catch (RuntimeException ignored) {
+            // 打不开就算了
+        }
     }
 
     private void addButtonRaw(String label, int x, int y, int w, Runnable action) {

@@ -84,6 +84,9 @@ public class CardStudioScreen extends Screen {
     private String filterTemplateInput = "";
     private boolean nameClearArmed;
     private long nameClearAt;
+    private boolean cardDeleteArmed;
+    private String cardDeleteTarget = "";
+    private long cardDeleteAt;
 
     public CardStudioScreen(Screen parent) {
         super(Component.literal("角色卡工坊"));
@@ -93,6 +96,8 @@ public class CardStudioScreen extends Screen {
     // 自动保存：改动后 400ms 内没有新改动就落盘；顶部「保存」按钮仍可手动立即保存
     private boolean savePending;
     private long saveAt;
+    /** 显示名改动待写回角色身份（避免每敲一个字就写卡+清全部纹理）。 */
+    private boolean characterDirty;
 
     // ───────────────────────── 生命周期 ─────────────────────────
 
@@ -104,6 +109,7 @@ public class CardStudioScreen extends Screen {
     private void flushAutoSave() {
         if (this.savePending && System.currentTimeMillis() >= this.saveAt) {
             this.savePending = false;
+            commitCharacter();
             CommsConfig.save();
         }
     }
@@ -112,7 +118,18 @@ public class CardStudioScreen extends Screen {
     private void flushAutoSaveNow() {
         if (this.savePending) {
             this.savePending = false;
+            commitCharacter();
             CommsConfig.save();
+        } else if (this.characterDirty) {
+            commitCharacter();
+        }
+    }
+
+    /** 显示名只改内存，400ms 防抖/关界面时统一写一次角色身份。 */
+    private void commitCharacter() {
+        if (this.characterDirty) {
+            this.characterDirty = false;
+            writeCharacter();
         }
     }
 
@@ -289,7 +306,7 @@ public class CardStudioScreen extends Screen {
         box.setValue(this.displayName);
         box.setResponder(value -> {
             this.displayName = value;
-            writeCharacter();
+            this.characterDirty = true;
             autoSave();
         });
         addWidget(box);
@@ -810,12 +827,26 @@ public class CardStudioScreen extends Screen {
                 this.init();
             }
         });
-        addButton("删除此卡", fieldX() + half + 6, this.cursorY, half, () -> {
-            if (!PlayerCards.DEFAULT_CARD.equals(this.selected) && PlayerCards.delete(this.selected)) {
-                CommsConfig.selectCard(PlayerCards.DEFAULT_CARD);
-                this.selected = PlayerCards.DEFAULT_CARD;
-                this.init();
+        boolean deleteArmed = this.cardDeleteArmed && this.selected.equals(this.cardDeleteTarget)
+                && System.currentTimeMillis() - this.cardDeleteAt < 5000;
+        addButton(deleteArmed ? "确认删除" : "删除此卡", fieldX() + half + 6, this.cursorY, half, () -> {
+            if (PlayerCards.DEFAULT_CARD.equals(this.selected)) {
+                return;
             }
+            if (deleteArmed) {
+                if (PlayerCards.delete(this.selected)) {
+                    this.cardDeleteArmed = false;
+                    CommsConfig.selectCard(PlayerCards.DEFAULT_CARD);
+                    this.selected = PlayerCards.DEFAULT_CARD;
+                    this.actionStatus = "已删除角色卡";
+                }
+            } else {
+                this.cardDeleteArmed = true;
+                this.cardDeleteTarget = this.selected;
+                this.cardDeleteAt = System.currentTimeMillis();
+                this.actionStatus = "再点一次确认删除 " + this.selected;
+            }
+            this.layoutPage();
         });
         this.cursorY += ROW;
 
@@ -1220,10 +1251,8 @@ public class CardStudioScreen extends Screen {
                                java.util.function.ObjIntConsumer<CommsConfig.TextElement> setter) {
         CommsSlider slider = new CommsSlider(label, label, fieldX(), this.cursorY, fieldW(), 16,
                 () -> getter.applyAsInt(element),
-                v -> {
-                    setter.accept(element, (int) Math.round(v));
-                    CommsConfig.save();
-                }, min, max, true, "", false);
+                v -> setter.accept(element, (int) Math.round(v)),
+                min, max, true, "", false);
         addWidget(slider);
         this.cursorY += ROW;
     }
@@ -1419,6 +1448,7 @@ public class CardStudioScreen extends Screen {
         data.skin = this.skinRef == null ? "" : this.skinRef;
         data.portrait = this.portraitRef == null ? "" : this.portraitRef;
         CardCharacter.write(this.selected, data);
+        this.characterDirty = false;
         CardCharacter.clearCache();
         CardTextures.clearAll();
         PortraitSource.clear();
@@ -1627,6 +1657,7 @@ public class CardStudioScreen extends Screen {
 
     @Override
     public void onClose() {
+        commitColor();
         flushAutoSaveNow();
         CommsHud.setPreviewForced(false);
         CommsConfig.setEditingScreen(false);
@@ -1635,6 +1666,7 @@ public class CardStudioScreen extends Screen {
 
     @Override
     public void removed() {
+        commitColor();
         flushAutoSaveNow();
         CommsHud.setPreviewForced(false);
         CommsConfig.setEditingScreen(false);

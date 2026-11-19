@@ -576,11 +576,10 @@ public final class ServerStageTriggers {
             if (center == null) {
                 center = targets.get(0);
             }
-            offer(center.getUUID(), pending);
+            return offer(center.getUUID(), pending);
         } else {
-            offer(GROUP_QUEUE, pending);
+            return offer(GROUP_QUEUE, pending);
         }
-        return true;
     }
 
     private static long sequenceDuration(List<StageScripts.Group> groups) {
@@ -617,22 +616,22 @@ public final class ServerStageTriggers {
         }
     }
 
-    private static void offer(java.util.UUID owner, Pending item) {
+    private static boolean offer(java.util.UUID owner, Pending item) {
         if (owner == null) {
-            return;
+            return false;
         }
         Pending current = CURRENT.get(owner);
         if (current != null && current.key.equals(item.key)) {
-            return;   // 同一事件组正在播 → 跳过
+            return false;   // 同一事件组正在播 → 跳过
         }
         java.util.Deque<Pending> queue = QUEUES.computeIfAbsent(owner, ignored -> new java.util.ArrayDeque<>());
         for (Pending queued : queue) {
             if (queued.key.equals(item.key)) {
-                return;   // 队列里已有同一事件组 → 跳过
+                return false;   // 队列里已有同一事件组 → 跳过
             }
         }
         if (current != null && item.rank < current.rank) {
-            return;   // 高优先级正在播，低优先级直接丢弃
+            return false;   // 高优先级正在播，低优先级直接丢弃
         }
         if (queue.size() >= MAX_QUEUE) {
             Pending victim = null;
@@ -642,7 +641,7 @@ public final class ServerStageTriggers {
                 }
             }
             if (victim == null) {
-                return;   // 全是同级或更高 → 丢弃新来的
+                return false;   // 全是同级或更高 → 丢弃新来的
             }
             queue.remove(victim);
         }
@@ -653,6 +652,7 @@ public final class ServerStageTriggers {
                 : Long.compare(a.created, b.created));
         queue.clear();
         queue.addAll(sorted);
+        return true;
     }
 
     private static void flushQueues(MinecraftServer server, long now) {
@@ -763,8 +763,9 @@ public final class ServerStageTriggers {
             }
             try {
                 PROJECTS.put(entry.getKey(), new Cached(StageScripts.load(entry.getKey()), mtime));
-            } catch (IOException ignored) {
+            } catch (IOException | RuntimeException error) {
                 PROJECTS.remove(entry.getKey());
+                LOGGER.warn("[acechat] 工程 {} 读取失败，已跳过", entry.getKey(), error);
             }
         }
     }

@@ -41,6 +41,7 @@ public class ChoiceListScreen extends Screen {
     }
 
     private void build() {
+        this.clearWidgets();   // 滚轮重建时先清旧按钮，避免一组组叠加
         int maxScroll = Math.max(0, this.items.size() - visibleRows());
         this.scroll = Math.max(0, Math.min(this.scroll, maxScroll));
         int x = this.width / 2 - 140;

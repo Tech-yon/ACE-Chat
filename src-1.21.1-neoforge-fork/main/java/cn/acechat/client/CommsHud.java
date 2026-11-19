@@ -60,6 +60,10 @@ public final class CommsHud {
       CommsState.Entry shownEntry = CommsState.displayedEntry();
       if (shownEntry != null) {
          CommsConfig.autoApplyCardFor(shownEntry.name());
+      } else if (CommsConfig.portraitAlwaysVisible.get() && !CommsState.stageActive()
+              && Minecraft.getInstance().player != null) {
+         // 常驻但没人发言：形象画自己，文字/调色也必须切回自己的卡
+         CommsConfig.autoApplyCardFor(Minecraft.getInstance().player.getGameProfile().getName());
       }
       // 渲染路径整体兜底：万一出问题只记一条日志、这一帧不画，绝不让 HUD 把游戏搞崩。
       try {
@@ -769,8 +773,19 @@ public final class CommsHud {
 
          String text = resolved;
          int max = Math.max(1, Math.round(element.maxWidth * CommsConfig.elementScale(width)));
-         while (font.width(text) > max && text.length() > 1) {
-            text = text.substring(0, text.length() - 1);
+         // 二分求“不超过 max 的最长前缀”，避免长文本每帧 O(n²) 量宽度
+         if (font.width(text) > max && text.length() > 1) {
+            int lo = 0;
+            int hi = text.length();
+            while (lo < hi) {
+               int mid = (lo + hi + 1) >>> 1;
+               if (font.width(text.substring(0, mid)) <= max) {
+                  lo = mid;
+               } else {
+                  hi = mid - 1;
+               }
+            }
+            text = text.substring(0, Math.max(1, lo));
          }
 
          if (!text.equals(resolved)) {

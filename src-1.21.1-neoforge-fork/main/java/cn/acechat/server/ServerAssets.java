@@ -110,6 +110,9 @@ public final class ServerAssets {
                 continue;
             }
             try {
+                if (Files.size(file) > CardAssets.HARD_MAX_BYTES) {
+                    continue;   // 先看大小，不要把超大文件读进内存
+                }
                 byte[] bytes = Files.readAllBytes(file);
                 if (bytes.length > CardAssets.HARD_MAX_BYTES) {
                     continue;
@@ -128,22 +131,44 @@ public final class ServerAssets {
     }
 
     private static Path fileOf(String kind, String id) {
+        if (kind == null || id == null || id.isBlank() || id.indexOf('\0') >= 0) {
+            return null;
+        }
         if ("skin".equals(kind)) {
-            if (id.startsWith(CardAssets.SLIM + "/")) {
-                Path dir = CardAssets.skinsSlimDir();
-                return dir == null ? null : dir.resolve(id.substring(CardAssets.SLIM.length() + 1));
+            String name = id;
+            if (name.startsWith(CardAssets.SLIM + "/")) {
+                return safeResolve(CardAssets.skinsSlimDir(), name.substring(CardAssets.SLIM.length() + 1));
             }
-            if (id.startsWith(CardAssets.CLASSIC + "/")) {
-                Path dir = CardAssets.skinsClassicDir();
-                return dir == null ? null : dir.resolve(id.substring(CardAssets.CLASSIC.length() + 1));
+            if (name.startsWith(CardAssets.CLASSIC + "/")) {
+                return safeResolve(CardAssets.skinsClassicDir(), name.substring(CardAssets.CLASSIC.length() + 1));
             }
             return null;
         }
         if ("portrait".equals(kind)) {
-            Path dir = CardAssets.portraitsDir();
-            return dir == null ? null : dir.resolve(id);
+            if (id.indexOf('/') >= 0 || id.indexOf('\\') >= 0) {
+                return null;
+            }
+            return safeResolve(CardAssets.portraitsDir(), id);
         }
         return null;
+    }
+
+    /** 目录内解析：拒绝绝对路径/..，normalize 后必须仍在 base 下。 */
+    private static Path safeResolve(Path base, String relative) {
+        if (base == null || relative == null || relative.isBlank()
+                || relative.indexOf('/') >= 0 || relative.indexOf('\\') >= 0) {
+            return null;
+        }
+        try {
+            Path root = base.toAbsolutePath().normalize();
+            Path candidate = root.resolve(relative).normalize();
+            if (!candidate.startsWith(root)) {
+                return null;
+            }
+            return candidate;
+        } catch (RuntimeException error) {
+            return null;
+        }
     }
 
     private static void addFile(Map<String, String> files, String kind, String id) {
@@ -159,6 +184,9 @@ public final class ServerAssets {
             return;
         }
         try {
+            if (Files.size(file) > CardAssets.HARD_MAX_BYTES) {
+                return;
+            }
             files.put(key, sha1(Files.readAllBytes(file)));
         } catch (Exception ignored) {
             // 读失败就跳过

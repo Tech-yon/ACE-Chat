@@ -42,6 +42,14 @@ public final class PortraitGrade {
     private static final Map<String, Long> STARTED = new HashMap<>();
     private static final long RETRY_MS = 5000L;
     private static final long STUCK_MS = 15000L;
+    /** 单线程烘焙：避免每帧/每个参数变化都开新线程。 */
+    private static final java.util.concurrent.ExecutorService BAKER =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread thread = new Thread(r, "acechat-grade");
+                thread.setDaemon(true);
+                return thread;
+            });
+    private static long lastBakeStart;
     private static boolean logged;
 
     private PortraitGrade() {
@@ -49,6 +57,17 @@ public final class PortraitGrade {
 
     /** 参数变了：丢掉已烘焙的纹理（下次绘制重新烘焙）。 */
     public static void invalidate() {
+        // 释放旧烘焙纹理，避免拖滑条时无限积累显存
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft != null) {
+                for (ResourceLocation id : CACHE.values()) {
+                    minecraft.getTextureManager().release(id);
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // 释放失败不影响后续重新烘焙
+        }
         CACHE.clear();
         PENDING.clear();
         FAILED.clear();
@@ -83,6 +102,9 @@ public final class PortraitGrade {
         if (failedAt != null && now - failedAt < RETRY_MS) {
             return original;
         }
+        if (now - lastBakeStart < 200L) {
+            return original;   // 限流：拖滑条时最多每 200ms 启动一次烘焙
+        }
         if (PENDING.add(key)) {
             startBake(minecraft, source, key);
         }
@@ -105,7 +127,8 @@ public final class PortraitGrade {
         int amount = CommsConfig.duotoneAmount.get();
 
         STARTED.put(key, System.currentTimeMillis());
-        Thread thread = new Thread(() -> {
+        lastBakeStart = System.currentTimeMillis();
+        BAKER.execute(() -> {
             NativeImage image = null;
             try {
                 // 关键：先读「正在画的那张皮肤」（卡皮肤 / 预览皮肤 / 立绘都可能是它），
@@ -134,9 +157,7 @@ public final class PortraitGrade {
                 }
                 failBake(key, id, error);
             }
-        }, "acechat-grade");
-        thread.setDaemon(true);
-        thread.start();
+        });
     }
 
     /** 失败收尾：清掉“烘焙中”标记、记录重试时间，并让下次重新解析皮肤（纹理可能已经换了位置/被释放）。 */

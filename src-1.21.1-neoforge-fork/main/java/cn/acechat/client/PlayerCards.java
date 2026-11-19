@@ -134,15 +134,7 @@ public final class PlayerCards {
      * 文件系统不支持原子移动时退回普通替换。
      */
     static void writeStringAtomic(Path path, String text) throws java.io.IOException {
-        Files.createDirectories(path.getParent());
-        Path tmp = path.resolveSibling(path.getFileName() + ".tmp");
-        Files.writeString(tmp, text, StandardCharsets.UTF_8);
-        try {
-            Files.move(tmp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException error) {
-            Files.move(tmp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        }
+        cn.acechat.AceChatFiles.writeStringAtomic(path, text);
     }
 
     public static boolean delete(String cardName) {
@@ -295,8 +287,15 @@ public final class PlayerCards {
         try {
             Path dir = targetDir == null ? exportDir() : targetDir;
             Files.createDirectories(dir);
-            Path file = dir.resolve(fileNameOf(cardName));
-            Files.writeString(file, GSON.toJson(data), StandardCharsets.UTF_8);
+            String base = fileNameOf(cardName);
+            Path file = dir.resolve(base);
+            int index = 1;
+            while (Files.exists(file)) {
+                String name = base.toLowerCase(Locale.ROOT).endsWith(".json")
+                        ? base.substring(0, base.length() - 5) : base;
+                file = dir.resolve(name + "-" + index++ + ".json");
+            }
+            writeStringAtomic(file, GSON.toJson(data));
             return file;
         } catch (Exception error) {
             LOGGER.warn("[acechat] 导出角色卡 " + cardName + " 失败", error);

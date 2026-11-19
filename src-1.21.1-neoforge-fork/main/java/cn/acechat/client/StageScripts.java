@@ -105,8 +105,18 @@ public final class StageScripts {
         return parsed;
     }
 
-    /** 纯解析（无文件 IO），便于无头测试。 */
+    /** 纯解析（无文件 IO），便于无头测试；所有字段类型错误都转成 IOException。 */
     public static Project parseProject(String json) throws IOException {
+        try {
+            return parseProjectUnsafe(json);
+        } catch (IOException error) {
+            throw error;
+        } catch (RuntimeException error) {
+            throw new IOException("工程字段类型错误: " + error, error);
+        }
+    }
+
+    private static Project parseProjectUnsafe(String json) throws IOException {
         JsonObject root;
         try {
             JsonElement parsed = JsonParser.parseString(stripComments(json));

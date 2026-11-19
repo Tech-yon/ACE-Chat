@@ -204,6 +204,10 @@ private boolean waitingHotkey = false;
    @Override
    protected void init() {
       CommsConfig.setEditingScreen(true);
+      // 旧界面也强制回到“正在编辑的卡”，避免沿用渲染期临时套用的说话人卡
+      if (!CommsConfig.currentCard().equals(CommsConfig.appliedCardName())) {
+         CommsConfig.applyCardForEditing(CommsConfig.currentCard());
+      }
       this.clearWidgets();
       this.fields.clear();
       this.readers.clear();

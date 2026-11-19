@@ -747,6 +747,13 @@ public class CardStudioScreen extends Screen {
             this.layoutPage();
         });
         addColorRow("描边颜色", CommsConfig.chatTextOutlineColor);
+        CommsSlider outlineWidth = new CommsSlider("描边粗细", "描边粗细（0~3，0.1 步进）",
+                fieldX(), this.cursorY, fieldW(), 16,
+                () -> CommsConfig.chatTextOutlineWidth.get(),
+                v -> CommsConfig.chatTextOutlineWidth.set(Math.round(v * 10.0D) / 10.0D),
+                0.0D, 3.0D, false, "", false);
+        addWidget(outlineWidth);
+        this.cursorY += ROW;
         addSliderRowDouble("单条停留", CommsConfig.lineHoldSeconds, 0.5, 60.0);
         addSliderRowDouble("停留下限", CommsConfig.holdMinSeconds, 0.0, 5.0);
         addSliderRowDouble("停留上限", CommsConfig.holdMaxSeconds, 1.0, 15.0);

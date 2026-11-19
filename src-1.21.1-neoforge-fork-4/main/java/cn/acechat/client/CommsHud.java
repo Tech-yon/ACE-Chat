@@ -443,15 +443,34 @@ public final class CommsHud {
          return;
       }
       FormattedCharSequence outline = withSolidColor(line, outlineColor);
-      graphics.drawString(font, outline, x - 1, y, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x + 1, y, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x, y - 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x, y + 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x - 1, y - 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x + 1, y - 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x - 1, y + 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x + 1, y + 1, TEXT_MAIN, false);
+      double outlineWidth = Math.max(0.0D, Math.min(3.0D, CommsConfig.chatTextOutlineWidth.get()));
+      if (outlineWidth > 0.05D) {
+         int full = (int) Math.floor(outlineWidth);
+         for (int radius = 1; radius <= full; radius++) {
+            drawOutlineRing(graphics, font, outline, x, y, radius);
+         }
+         double remaining = outlineWidth - full;
+         if (remaining > 0.05D) {
+            drawOutlineRing(graphics, font, outline, x, y, outlineWidth);
+         }
+      }
       graphics.drawString(font, line, x, y, TEXT_MAIN, false);
+   }
+
+   /** 在半径 radius 的圆环上重绘描边层（16 方向采样，支持 0.1 步进的小数半径）。 */
+   private static void drawOutlineRing(GuiGraphics graphics, Font font, FormattedCharSequence line,
+                                       int x, int y, double radius) {
+      int samples = 16;
+      for (int i = 0; i < samples; i++) {
+         double angle = Math.PI * 2.0D * i / samples;
+         float dx = (float) (Math.cos(angle) * radius);
+         float dy = (float) (Math.sin(angle) * radius);
+         var pose = graphics.pose();
+         pose.pushPose();
+         pose.translate(dx, dy, 0.0F);
+         graphics.drawString(font, line, x, y, TEXT_MAIN, false);
+         pose.popPose();
+      }
    }
 
    /** 把整行的每个字形都强制成同一种颜色（用于描边层）。 */

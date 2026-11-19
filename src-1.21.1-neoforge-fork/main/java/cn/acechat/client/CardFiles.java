@@ -55,7 +55,7 @@ public final class CardFiles {
         }
         try {
             Files.createDirectories(file.getParent());
-            cn.acechat.AceChatFiles.writeStringAtomic(file, GSON.toJson(data) + System.lineSeparator());
+            Files.writeString(file, GSON.toJson(data) + System.lineSeparator(), StandardCharsets.UTF_8);
             return true;
         } catch (IOException e) {
             return false;

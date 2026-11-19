@@ -60,10 +60,6 @@ public final class CommsHud {
       CommsState.Entry shownEntry = CommsState.displayedEntry();
       if (shownEntry != null) {
          CommsConfig.autoApplyCardFor(shownEntry.name());
-      } else if (CommsConfig.portraitAlwaysVisible.get() && !CommsState.stageActive()
-              && Minecraft.getInstance().player != null) {
-         // 常驻但没人发言：形象画自己，文字/调色也必须切回自己的卡
-         CommsConfig.autoApplyCardFor(Minecraft.getInstance().player.getGameProfile().getName());
       }
       // 渲染路径整体兜底：万一出问题只记一条日志、这一帧不画，绝不让 HUD 把游戏搞崩。
       try {
@@ -421,43 +417,12 @@ public final class CommsHud {
       // （旧代码是每行各自居中 —— 短行被推进去，看起来就是「名字居中、<> 和正文错位」。）
       // 每一行各自居中：名字一行居中、正文各行居中（<<< / >>> 紧贴正文两端）。
       int y = top + CommsConfig.chatPaddingY.get();
-      int textEffect = CommsConfig.chatTextEffect.get();
-      int outlineColor = CommsConfig.chatTextOutlineColor.get();
       for (FormattedCharSequence line : lines) {
          int lineWidth = font.width(line);
          int lineLeft = left + Math.max(0, (width - lineWidth) / 2);
-         drawTextLine(graphics, font, line, lineLeft, y, textEffect, outlineColor);
+         graphics.drawString(font, line, lineLeft, y, TEXT_MAIN, true);
          y += LINE_HEIGHT;
       }
-   }
-
-   /** 聊天文字效果：0=原版阴影，1=描边，2=无。描边用同一条文本重绘 4 个方向，只换颜色。 */
-   private static void drawTextLine(GuiGraphics graphics, Font font, FormattedCharSequence line,
-                                    int x, int y, int effect, int outlineColor) {
-      if (effect == 2) {
-         graphics.drawString(font, line, x, y, TEXT_MAIN, false);
-         return;
-      }
-      if (effect == 0) {
-         graphics.drawString(font, line, x, y, TEXT_MAIN, true);
-         return;
-      }
-      FormattedCharSequence outline = withSolidColor(line, outlineColor);
-      graphics.drawString(font, outline, x - 1, y, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x + 1, y, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x, y - 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x, y + 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x - 1, y - 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x + 1, y - 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x - 1, y + 1, TEXT_MAIN, false);
-      graphics.drawString(font, outline, x + 1, y + 1, TEXT_MAIN, false);
-      graphics.drawString(font, line, x, y, TEXT_MAIN, false);
-   }
-
-   /** 把整行的每个字形都强制成同一种颜色（用于描边层）。 */
-   private static FormattedCharSequence withSolidColor(FormattedCharSequence source, int argb) {
-      Style style = Style.EMPTY.withColor(TextColor.fromRgb(argb & 0xFFFFFF));
-      return sink -> source.accept((index, original, codePoint) -> sink.accept(index, style, codePoint));
    }
 
    /**
@@ -773,19 +738,8 @@ public final class CommsHud {
 
          String text = resolved;
          int max = Math.max(1, Math.round(element.maxWidth * CommsConfig.elementScale(width)));
-         // 二分求“不超过 max 的最长前缀”，避免长文本每帧 O(n²) 量宽度
-         if (font.width(text) > max && text.length() > 1) {
-            int lo = 0;
-            int hi = text.length();
-            while (lo < hi) {
-               int mid = (lo + hi + 1) >>> 1;
-               if (font.width(text.substring(0, mid)) <= max) {
-                  lo = mid;
-               } else {
-                  hi = mid - 1;
-               }
-            }
-            text = text.substring(0, Math.max(1, lo));
+         while (font.width(text) > max && text.length() > 1) {
+            text = text.substring(0, text.length() - 1);
          }
 
          if (!text.equals(resolved)) {

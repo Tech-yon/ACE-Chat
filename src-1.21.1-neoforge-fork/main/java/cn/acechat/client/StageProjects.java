@@ -313,8 +313,8 @@ public final class StageProjects {
     private static boolean write(String project, JsonObject root) {
         try {
             Files.createDirectories(StageScripts.dir());
-            cn.acechat.AceChatFiles.writeStringAtomic(StageScripts.dir().resolve(project + ".json"),
-                    GSON.toJson(root) + System.lineSeparator());
+            Files.writeString(StageScripts.dir().resolve(project + ".json"),
+                    GSON.toJson(root) + System.lineSeparator(), StandardCharsets.UTF_8);
             return true;
         } catch (IOException e) {
             return false;

@@ -111,10 +111,6 @@ public final class CommsConfig {
     public static final Value<Boolean> chatBorderEnabled = bool(false);
     public static final Value<Integer> chatBorderColor = color(0xFF63E66B);
     public static final Value<Integer> chatBorderThickness = integer(1, 0, 2);
-    /** 聊天文字效果：0=原版阴影，1=描边，2=无。 */
-    public static final Value<Integer> chatTextEffect = integer(1, 0, 2);
-    /** 描边颜色（ARGB），效果=1 时生效。 */
-    public static final Value<Integer> chatTextOutlineColor = color(0xFF000000);
 
     public static final Value<ChatFilter> filter = new Value<>(ChatFilter.ALL_PLAYERS, v -> v == null ? ChatFilter.ALL_PLAYERS : v);
     public static final Value<Boolean> removeFromVanillaChat = bool(false);
@@ -270,8 +266,6 @@ public final class CommsConfig {
     public static final Value<Integer> portraitImageOffsetY = integer(0, -200, 200);
 
     public static final List<NameColor> nameColors = new ArrayList<>();
-    /** 本卡默认名字颜色（"RRGGBB"，空 = 跟随全局 chatNameColor）；随卡保存，演出/普通聊天都生效。 */
-    public static final Value<String> cardNameColor = text("");
     public static final List<TextElement> textElements = new ArrayList<>();
     /** 模组总目录：游戏主文件夹下的 ACE_config/（角色卡、素材、导出都集中在里面）。 */
     public static final Path CONFIG_DIR = AceChatFolders.rootDir();
@@ -279,8 +273,6 @@ public final class CommsConfig {
     public static final Path EXPORT_DIR = CONFIG_DIR.resolve("export");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static boolean loaded;
-    private static boolean loading;
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("acechat");
 
     static {
         load();
@@ -296,18 +288,10 @@ public final class CommsConfig {
     /** 一套滤镜模板：叠加滤镜 + 调色参数。 */
     public static final class FilterTemplate {
         public String name = "";
-        /** 1 = 含滤镜调色/特效颜色等扩展字段；旧模板为 0，不覆盖现有值。 */
-        public int version = 1;
         public boolean filterEnabled;
         public String filterName = "";
         public int filterAlpha = 65;
         public int filterBlend = 1;
-        public int filterTint = 0xFFFFFFFF;
-        public int filterBrightness = 100;
-        public int filterContrast = 100;
-        public int filterSaturation = 100;
-        public int filterHue;
-        public List<String> filterEffectColors = new ArrayList<>();
         public boolean gradeEnabled;
         public int gradeBrightness = 100;
         public int gradeContrast = 100;
@@ -329,12 +313,6 @@ public final class CommsConfig {
         t.filterName = filterName.get();
         t.filterAlpha = filterAlpha.get();
         t.filterBlend = filterBlend.get();
-        t.filterTint = filterTint.get();
-        t.filterBrightness = filterBrightness.get();
-        t.filterContrast = filterContrast.get();
-        t.filterSaturation = filterSaturation.get();
-        t.filterHue = filterHue.get();
-        t.filterEffectColors = new ArrayList<>(filterEffectColors.get());
         t.gradeEnabled = gradeEnabled.get();
         t.gradeBrightness = gradeBrightness.get();
         t.gradeContrast = gradeContrast.get();
@@ -354,14 +332,6 @@ public final class CommsConfig {
         filterName.set(t.filterName == null ? "" : t.filterName);
         filterAlpha.set(t.filterAlpha);
         filterBlend.set(t.filterBlend);
-        if (t.version >= 1) {
-            filterTint.set(t.filterTint);
-            filterBrightness.set(t.filterBrightness);
-            filterContrast.set(t.filterContrast);
-            filterSaturation.set(t.filterSaturation);
-            filterHue.set(t.filterHue);
-            filterEffectColors.set(t.filterEffectColors == null ? List.of() : List.copyOf(t.filterEffectColors));
-        }
         gradeEnabled.set(t.gradeEnabled);
         gradeBrightness.set(t.gradeBrightness);
         gradeContrast.set(t.gradeContrast);
@@ -626,7 +596,7 @@ public final class CommsConfig {
                 hudEnabled.reset(); centerXOffset.reset(); topYOffset.reset(); maxLines.reset(); boxWidth.reset();
                 backgroundAlpha.reset(); lineHoldSeconds.reset(); holdMinSeconds.reset(); holdMaxSeconds.reset();
                 chatBackgroundColor.reset(); chatNameColor.reset(); chatRightGap.reset(); chatLeftMargin.reset(); chatNameMaxWidth.reset(); chatSymbolPadding.reset(); chatSymbolColor.reset(); chatPaddingX.reset(); chatPaddingY.reset();
-                chatBorderEnabled.reset(); chatBorderColor.reset(); chatBorderThickness.reset(); chatTextEffect.reset(); chatTextOutlineColor.reset();
+                chatBorderEnabled.reset(); chatBorderColor.reset(); chatBorderThickness.reset();
                 filter.reset(); removeFromVanillaChat.reset(); ncrCompat.reset(); vanillaPlayerChat.reset();
                 vanillaOtherMessages.reset(); includeActions.reset(); whitelist.reset();
                 chatVisibleLines.reset(); chatScreenLines.reset();
@@ -682,53 +652,10 @@ public final class CommsConfig {
     }
     public static String customInfo(String playerName) { return mappedValue(customInfo.get(), playerName, ""); }
     public static int nameColor(String uuid, String name) {
-        NameColor item = findNameColor(uuid, name);
-        return item == null ? -1 : item.color;
-    }
-
-    /** 命中的名字颜色条目（没有返回 null）；单独拿出来是为了区分“白色 = 0xFFFFFFFF”与“未配置 -1”。 */
-    private static NameColor findNameColor(String uuid, String name) {
         for (NameColor item : nameColors) {
-            if ((uuid != null && !uuid.isBlank() && uuid.equalsIgnoreCase(item.uuid))
-                    || (name != null && name.equalsIgnoreCase(item.name))) {
-                return item;
-            }
+            if ((uuid != null && !uuid.isBlank() && uuid.equalsIgnoreCase(item.uuid)) || (name != null && name.equalsIgnoreCase(item.name))) return item.color;
         }
-        return null;
-    }
-
-    /**
-     * 最终名字颜色：条目命中优先 → 本卡默认色 → 全局默认色。
-     * 白色条目（0xFFFFFFFF = -1）也按“命中”处理，不会被当成未配置。
-     */
-    public static int resolvedNameColor(String uuid, String name) {
-        NameColor item = findNameColor(uuid, name);
-        if (item != null) {
-            return item.color;
-        }
-        Integer own = cardNameColorArgb();
-        return own != null ? own : chatNameColor.get();
-    }
-
-    /** 本卡名字颜色（ARGB）；未设置返回 null。 */
-    public static Integer cardNameColorArgb() {
-        String hex = cardNameColor.get();
-        if (hex == null || hex.isBlank()) {
-            return null;
-        }
-        try {
-            return 0xFF000000 | Integer.parseInt(hex.replace("#", "").trim(), 16);
-        } catch (NumberFormatException error) {
-            return null;
-        }
-    }
-
-    public static void setCardNameColorArgb(int argb) {
-        cardNameColor.set(String.format("%06X", argb & 0xFFFFFF));
-    }
-
-    public static void clearCardNameColor() {
-        cardNameColor.set("");
+        return -1;
     }
 
     /**
@@ -774,18 +701,31 @@ public final class CommsConfig {
         return " ".repeat(Math.round(padding / 4.0F));
     }
 
+    /** 「&lt;&gt;」符号的样式（颜色取 {@link #chatSymbolColor}）。 */
+    public static net.minecraft.network.chat.Style chatSymbolStyle() {
+        return net.minecraft.network.chat.Style.EMPTY
+                .withColor(net.minecraft.network.chat.TextColor.fromRgb(chatSymbolColor.get() & 0xFFFFFF));
+    }
+
+    /** 聊天正文的样式（固定白色）。 */
+    public static net.minecraft.network.chat.Style chatBodyStyle() {
+        return net.minecraft.network.chat.Style.EMPTY
+                .withColor(net.minecraft.network.chat.TextColor.fromRgb(0xFFFFFF));
+    }
+
     /**
      * 拼一条聊天行：<b>玩家名称</b> + <b>&lt;&gt; 符号</b> + <b>内容</b> 三段。
      *
      * <p>符号与内容之间的间隔由 {@link #chatSymbolPadding} 决定（按 4px 粒度折算成空格，
-     * 左右半边同时生效）；<b>符号颜色跟随名字颜色</b>（与 HUD 完全一致），内容固定白色。
+     * 左右半边同时生效）；符号颜色用 {@link #chatSymbolColor}；内容固定白色。
      *
      * <p>顶部 HUD 的聊天框不走这里：它由 {@link ChatLayout} 自己按行排版（名字/符号/正文同行规则），
-     * 但符号与样式取的是同一套规则，保证「HUD 里看到的」和「按 T 注入的历史行」长得一样。
+     * 但符号与样式取的是同一批方法（{@link #chatSymbolPad()} / {@link #chatSymbolStyle()} /
+     * {@link #chatBodyStyle()}），保证「HUD 里看到的」和「按 T 注入的历史行」长得一样。
      */
     public static net.minecraft.network.chat.Component chatLine(String name, String text, net.minecraft.network.chat.Style nameStyle) {
         String pad = chatSymbolPad();
-        net.minecraft.network.chat.Style symbolStyle = nameStyle == null ? net.minecraft.network.chat.Style.EMPTY : nameStyle;
+        net.minecraft.network.chat.Style symbolStyle = chatSymbolStyle();
 
         return net.minecraft.network.chat.Component.literal(name == null ? "" : name)
                 .withStyle(nameStyle == null ? net.minecraft.network.chat.Style.EMPTY : nameStyle)
@@ -793,14 +733,12 @@ public final class CommsConfig {
                 .append(net.minecraft.network.chat.Component.literal(text == null ? "" : text).withStyle(chatBodyStyle()))
                 .append(net.minecraft.network.chat.Component.literal(pad + ">").withStyle(symbolStyle));
     }
-    /** 聊天正文的样式（固定白色）。 */
-    public static net.minecraft.network.chat.Style chatBodyStyle() {
-        return net.minecraft.network.chat.Style.EMPTY
-                .withColor(net.minecraft.network.chat.TextColor.fromRgb(0xFFFFFF));
-    }
 
     public static Style nameStyleFor(String uuid, String name) {
-        int color = resolvedNameColor(uuid, name);
+        int color = nameColor(uuid, name);
+        if (color == -1) {
+            color = chatNameColor.get();
+        }
 
         return Style.EMPTY.withColor(TextColor.fromRgb(color & 0xFFFFFF));
     }
@@ -885,10 +823,7 @@ public final class CommsConfig {
         // 演出（剧本）里说话人就是角色卡：即使关了“按显示玩家自动切卡”，也要套用他的卡，
         // 否则皮肤/立绘是角色的、文字元素和调色还是上一张卡的（看起来像“着色没渲染”）。
         boolean stage = CommsState.stageActive();
-        if (!autoCardByPlayer.get() && !stage) {
-            return;
-        }
-        if (editingScreen && !stage) {
+        if ((!autoCardByPlayer.get() && !stage) || editingScreen) {
             return;
         }
 
@@ -924,20 +859,6 @@ public final class CommsConfig {
         }
     }
 
-    /** 当前内存里实际套用的卡（渲染期可能是说话人/预览的卡，不一定是 activeCard）。 */
-    public static String appliedCardName() {
-        return appliedCard;
-    }
-
-    /** 打开编辑界面时强制回到正在编辑的卡，避免沿用渲染期临时套用的别人的卡。 */
-    public static void applyCardForEditing(String cardName) {
-        if (cardName == null || cardName.isBlank()) {
-            return;
-        }
-        appliedCard = cardName;
-        applyCard(cardName);
-    }
-
     /** 手动选中一张卡（界面里点击时用）。 */
     public static void selectCard(String cardName) {
         if (previewing()) {
@@ -956,10 +877,6 @@ public final class CommsConfig {
     }
 
     public static void saveCard() {
-        // 同 save()：只有内存里确实是当前卡时才允许写回，避免串卡
-        if (appliedCard != null && !appliedCard.equals(activeCard.get())) {
-            return;
-        }
         com.google.gson.JsonObject data = toJson();
         // 聊天框样式属于「当前客户端」的全局设置，不写进角色卡（卡只存形象/文字/调色）
         data.remove("chat");
@@ -1010,8 +927,6 @@ public final class CommsConfig {
         boolean border = chatBorderEnabled.get();
         int borderColor = chatBorderColor.get();
         int borderThickness = chatBorderThickness.get();
-        int textEffect = chatTextEffect.get();
-        int textOutlineColor = chatTextOutlineColor.get();
         ChatFilter mode = filter.get();
         boolean vanillaPlayer = vanillaPlayerChat.get();
         boolean vanillaOther = vanillaOtherMessages.get();
@@ -1065,8 +980,6 @@ public final class CommsConfig {
         chatBorderEnabled.set(border);
         chatBorderColor.set(borderColor);
         chatBorderThickness.set(borderThickness);
-        chatTextEffect.set(textEffect);
-        chatTextOutlineColor.set(textOutlineColor);
         filter.set(mode);
         vanillaPlayerChat.set(vanillaPlayer);
         vanillaOtherMessages.set(vanillaOther);
@@ -1173,15 +1086,6 @@ public final class CommsConfig {
      *                        「恢复默认」用它，免得把默认卡本身（本体预设）写脏。
      */
     private static void save(boolean writeActiveCard) {
-        if (loading) {
-            return;   // 加载过程中不要写盘（避免半套配置落盘/覆盖损坏文件）
-        }
-        // 渲染期可能临时套用了「说话人 / 编辑预览」的卡：此时内存里的内容不属于 activeCard。
-        // 只允许写自己的卡，否则会把别人的文字元素/形象写回当前卡，表现为“某张卡的元素叠到其它卡上”。
-        boolean ownCardApplied = appliedCard == null || appliedCard.equals(activeCard.get());
-        if (!ownCardApplied) {
-            writeActiveCard = false;
-        }
         // 每张卡的改动都即时写盘（卡文件与全局文件同时保持最新）
         if (writeActiveCard) {
             try {
@@ -1207,9 +1111,9 @@ public final class CommsConfig {
         try {
             Files.createDirectories(EXPORT_DIR);
             Path target = EXPORT_DIR.resolve("client-export-"
-                    + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS").format(java.time.LocalDateTime.now())
+                    + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(java.time.LocalDateTime.now())
                     + ".json");
-            PlayerCards.writeStringAtomic(target, GSON.toJson(toJson()));
+            Files.writeString(target, GSON.toJson(toJson()), StandardCharsets.UTF_8);
             return target;
         } catch (IOException ignored) { return null; }
     }
@@ -1354,13 +1258,12 @@ public final class CommsConfig {
     private static JsonObject toJson() {
         JsonObject root = new JsonObject(); root.addProperty("version", 18);
         JsonObject chat = new JsonObject(); add(chat, "enabled", hudEnabled.get());
-        chat.addProperty("elementBaseWidth", elementBaseWidth); add(chat, "centerXOffset", centerXOffset.get()); add(chat, "topYOffset", topYOffset.get()); add(chat, "maxLines", maxLines.get()); add(chat, "boxWidth", boxWidth.get()); add(chat, "backgroundAlpha", backgroundAlpha.get()); add(chat, "lineHoldSeconds", lineHoldSeconds.get()); add(chat, "holdMinSeconds", holdMinSeconds.get()); add(chat, "holdMaxSeconds", holdMaxSeconds.get()); add(chat, "backgroundColor", chatBackgroundColor.get()); add(chat, "nameColor", chatNameColor.get()); add(chat, "rightGap", chatRightGap.get()); add(chat, "leftMargin", chatLeftMargin.get()); add(chat, "nameMaxWidth", chatNameMaxWidth.get()); add(chat, "paddingX", chatPaddingX.get()); add(chat, "paddingY", chatPaddingY.get()); add(chat, "symbolColor", chatSymbolColor.get()); add(chat, "symbolPadding", chatSymbolPadding.get()); add(chat, "borderEnabled", chatBorderEnabled.get()); add(chat, "borderColor", chatBorderColor.get()); add(chat, "borderThickness", chatBorderThickness.get()); add(chat, "textEffect", chatTextEffect.get()); add(chat, "textOutlineColor", chatTextOutlineColor.get()); root.add("chat", chat);
-        JsonObject portrait = new JsonObject(); add(portrait, "enabled", portraitEnabled.get()); add(portrait, "chatHidden", portraitChatHidden.get()); add(portrait, "width", portraitWidth.get()); add(portrait, "height", portraitHeight.get()); add(portrait, "xOffset", portraitXOffset.get()); add(portrait, "yOffset", portraitYOffset.get()); add(portrait, "scale", portraitScale.get()); add(portrait, "anchor", portraitAnchor.get().name()); add(portrait, "xRatio", portraitXRatio.get()); add(portrait, "yRatio", portraitYRatio.get()); add(portrait, "followChat", portraitFollowChat.get()); add(portrait, "alwaysVisible", portraitAlwaysVisible.get()); add(portrait, "tint", portraitTint.get()); add(portrait, "opacity", portraitOpacity.get()); add(portrait, "brightness", portraitBrightness.get()); add(portrait, "panelColor", portraitPanelColor.get()); add(portrait, "panelAlpha", portraitPanelAlpha.get()); add(portrait, "borderColor", portraitBorderColor.get()); add(portrait, "borderThickness", portraitBorderThickness.get()); add(portrait, "backdropEnabled", portraitBackdropEnabled.get()); add(portrait, "backdropColor", portraitBackdropColor.get()); add(portrait, "backdropAlpha", portraitBackdropAlpha.get()); add(portrait, "backdropPadding", portraitBackdropPadding.get()); add(portrait, "bustScale", portraitBustScale.get()); add(portrait, "photoMode", portraitPhotoMode.get()); add(portrait, "photoHeight", portraitPhotoHeight.get()); add(portrait, "photoDivider", portraitPhotoDivider.get()); add(portrait, "outerLayer", portraitOuterLayer.get()); add(portrait, "filterEnabled", filterEnabled.get()); add(portrait, "filterName", filterName.get()); add(portrait, "filterAlpha", filterAlpha.get()); add(portrait, "filterBlend", filterBlend.get()); add(portrait, "filterTint", filterTint.get()); add(portrait, "filterBrightness", filterBrightness.get()); add(portrait, "filterContrast", filterContrast.get()); add(portrait, "filterSaturation", filterSaturation.get()); add(portrait, "filterHue", filterHue.get()); add(portrait, "filterEffectColors", filterEffectColors.get()); add(portrait, "gradeEnabled", gradeEnabled.get()); add(portrait, "gradeBrightness", gradeBrightness.get()); add(portrait, "gradeContrast", gradeContrast.get()); add(portrait, "gradeSaturation", gradeSaturation.get()); add(portrait, "gradeHue", gradeHue.get()); add(portrait, "duotoneEnabled", duotoneEnabled.get()); add(portrait, "duotoneDark", duotoneDark.get()); add(portrait, "duotoneLight", duotoneLight.get()); add(portrait, "duotoneAmount", duotoneAmount.get()); add(portrait, "cape", capeEnabled.get()); root.add("portrait", portrait);
+        chat.addProperty("elementBaseWidth", elementBaseWidth); add(chat, "centerXOffset", centerXOffset.get()); add(chat, "topYOffset", topYOffset.get()); add(chat, "maxLines", maxLines.get()); add(chat, "boxWidth", boxWidth.get()); add(chat, "backgroundAlpha", backgroundAlpha.get()); add(chat, "lineHoldSeconds", lineHoldSeconds.get()); add(chat, "holdMinSeconds", holdMinSeconds.get()); add(chat, "holdMaxSeconds", holdMaxSeconds.get()); add(chat, "backgroundColor", chatBackgroundColor.get()); add(chat, "nameColor", chatNameColor.get()); add(chat, "rightGap", chatRightGap.get()); add(chat, "leftMargin", chatLeftMargin.get()); add(chat, "nameMaxWidth", chatNameMaxWidth.get()); add(chat, "paddingX", chatPaddingX.get()); add(chat, "paddingY", chatPaddingY.get()); add(chat, "symbolColor", chatSymbolColor.get()); add(chat, "symbolPadding", chatSymbolPadding.get()); add(chat, "borderEnabled", chatBorderEnabled.get()); add(chat, "borderColor", chatBorderColor.get()); add(chat, "borderThickness", chatBorderThickness.get()); root.add("chat", chat);
+        JsonObject portrait = new JsonObject(); add(portrait, "enabled", portraitEnabled.get()); add(portrait, "chatHidden", portraitChatHidden.get()); add(portrait, "width", portraitWidth.get()); add(portrait, "height", portraitHeight.get()); add(portrait, "xOffset", portraitXOffset.get()); add(portrait, "yOffset", portraitYOffset.get()); add(portrait, "scale", portraitScale.get()); add(portrait, "anchor", portraitAnchor.get().name()); add(portrait, "xRatio", portraitXRatio.get()); add(portrait, "yRatio", portraitYRatio.get()); add(portrait, "followChat", portraitFollowChat.get()); add(portrait, "alwaysVisible", portraitAlwaysVisible.get()); add(portrait, "tint", portraitTint.get()); add(portrait, "opacity", portraitOpacity.get()); add(portrait, "brightness", portraitBrightness.get()); add(portrait, "panelColor", portraitPanelColor.get()); add(portrait, "panelAlpha", portraitPanelAlpha.get()); add(portrait, "borderColor", portraitBorderColor.get()); add(portrait, "borderThickness", portraitBorderThickness.get()); add(portrait, "backdropEnabled", portraitBackdropEnabled.get()); add(portrait, "backdropColor", portraitBackdropColor.get()); add(portrait, "backdropAlpha", portraitBackdropAlpha.get()); add(portrait, "backdropPadding", portraitBackdropPadding.get()); add(portrait, "bustScale", portraitBustScale.get()); add(portrait, "photoMode", portraitPhotoMode.get()); add(portrait, "photoHeight", portraitPhotoHeight.get()); add(portrait, "photoDivider", portraitPhotoDivider.get()); add(portrait, "outerLayer", portraitOuterLayer.get()); add(portrait, "filterEnabled", filterEnabled.get()); add(portrait, "filterName", filterName.get()); add(portrait, "filterAlpha", filterAlpha.get()); add(portrait, "filterBlend", filterBlend.get()); add(portrait, "gradeEnabled", gradeEnabled.get()); add(portrait, "gradeBrightness", gradeBrightness.get()); add(portrait, "gradeContrast", gradeContrast.get()); add(portrait, "gradeSaturation", gradeSaturation.get()); add(portrait, "gradeHue", gradeHue.get()); add(portrait, "duotoneEnabled", duotoneEnabled.get()); add(portrait, "duotoneDark", duotoneDark.get()); add(portrait, "duotoneLight", duotoneLight.get()); add(portrait, "duotoneAmount", duotoneAmount.get()); add(portrait, "cape", capeEnabled.get()); root.add("portrait", portrait);
         root.add("filter", array(whitelist.get())); root.add("customPortraits", array(customPortraits.get())); root.add("displayNames", array(displayNames.get())); root.add("customInfo", array(customInfo.get())); root.addProperty("removeFromVanillaChat", removeFromVanillaChat.get()); root.addProperty("vanillaPlayerChat", vanillaPlayerChat.get()); root.addProperty("vanillaOtherMessages", vanillaOtherMessages.get()); root.addProperty("filterMode", filter.get().name()); root.addProperty("blipSound", blipEnabled.get()); root.addProperty("soundVolume", soundVolume.get()); root.addProperty("goneSound", goneSoundEnabled.get()); root.addProperty("newSoundPreset", newSoundPreset.get()); root.addProperty("newSoundVolume", newSoundVolume.get()); root.addProperty("newSoundPitch", newSoundPitch.get()); root.addProperty("newSoundFadeIn", newSoundFadeIn.get()); root.addProperty("newSoundFadeOut", newSoundFadeOut.get()); root.addProperty("newSoundSpeed", newSoundSpeed.get()); root.addProperty("goneSoundPreset", goneSoundPreset.get()); root.addProperty("goneSoundVolume", goneSoundVolume.get()); root.addProperty("goneSoundPitch", goneSoundPitch.get()); root.addProperty("goneSoundFadeIn", goneSoundFadeIn.get()); root.addProperty("goneSoundFadeOut", goneSoundFadeOut.get()); root.addProperty("goneSoundSpeed", goneSoundSpeed.get()); root.addProperty("portraitUseImage", portraitUseImage.get()); root.addProperty("portraitImageName", portraitImageName.get()); root.addProperty("skinOffsetX", skinOffsetX.get()); root.addProperty("skinOffsetY", skinOffsetY.get()); root.addProperty("deathOverlay", deathOverlayEnabled.get()); root.addProperty("chatVisibleLines", chatVisibleLines.get()); root.addProperty("chatScreenLines", chatScreenLines.get()); root.addProperty("previewDragTarget", previewDragTarget.get()); root.addProperty("debugTiming", debugTiming.get()); root.addProperty("activeCard", activeCard.get()); root.addProperty("autoCardByPlayer", autoCardByPlayer.get()); root.addProperty("deathPreset", deathPreset.get()); root.addProperty("deathImageMaxSize", deathImageMaxSize.get()); root.addProperty("deathImageScale", deathImageScale.get()); root.addProperty("deathImageOffsetX", deathImageOffsetX.get()); root.addProperty("deathImageOffsetY", deathImageOffsetY.get()); root.addProperty("portraitImageScale", portraitImageScale.get()); root.addProperty("portraitImageOffsetX", portraitImageOffsetX.get()); root.addProperty("portraitImageOffsetY", portraitImageOffsetY.get());
         JsonArray names = new JsonArray(); nameColors.forEach(n -> names.add(GSON.toJsonTree(n))); root.add("nameColors", names); JsonArray templates = new JsonArray(); filterTemplates.forEach(t -> templates.add(GSON.toJsonTree(t))); root.add("filterTemplates", templates);
         JsonArray elements = new JsonArray(); textElements.forEach(e -> elements.add(GSON.toJsonTree(e))); root.add("textElements", elements);
         root.addProperty("ncrCompat", ncrCompat.get());
-        root.addProperty("cardNameColor", cardNameColor.get());
         return root;
     }
 
@@ -1373,16 +1276,14 @@ public final class CommsConfig {
             } catch (RuntimeException ignored) {
                 // 老配置没有或非法：保持 0，渲染时退回当前卡片宽度
             }
-        } set(chat, "centerXOffset", centerXOffset, JsonElement::getAsInt); set(chat, "topYOffset", topYOffset, JsonElement::getAsInt); set(chat, "maxLines", maxLines, JsonElement::getAsInt); set(chat, "boxWidth", boxWidth, JsonElement::getAsInt); set(chat, "backgroundAlpha", backgroundAlpha, JsonElement::getAsDouble); set(chat, "lineHoldSeconds", lineHoldSeconds, JsonElement::getAsDouble); set(chat, "holdMinSeconds", holdMinSeconds, JsonElement::getAsDouble); set(chat, "holdMaxSeconds", holdMaxSeconds, JsonElement::getAsDouble); set(chat, "backgroundColor", chatBackgroundColor, JsonElement::getAsInt); set(chat, "nameColor", chatNameColor, JsonElement::getAsInt); set(chat, "rightGap", chatRightGap, JsonElement::getAsInt); set(chat, "leftMargin", chatLeftMargin, JsonElement::getAsInt); set(chat, "nameMaxWidth", chatNameMaxWidth, JsonElement::getAsInt); set(chat, "paddingX", chatPaddingX, JsonElement::getAsInt); set(chat, "paddingY", chatPaddingY, JsonElement::getAsInt); set(chat, "symbolColor", chatSymbolColor, JsonElement::getAsInt); set(chat, "symbolPadding", chatSymbolPadding, JsonElement::getAsInt); set(chat, "borderEnabled", chatBorderEnabled, JsonElement::getAsBoolean); set(chat, "borderColor", chatBorderColor, JsonElement::getAsInt); set(chat, "borderThickness", chatBorderThickness, JsonElement::getAsInt); set(chat, "textEffect", chatTextEffect, JsonElement::getAsInt); set(chat, "textOutlineColor", chatTextOutlineColor, JsonElement::getAsInt);
-        set(portrait, "enabled", portraitEnabled, JsonElement::getAsBoolean); set(portrait, "chatHidden", portraitChatHidden, JsonElement::getAsBoolean); set(portrait, "width", portraitWidth, JsonElement::getAsInt); set(portrait, "height", portraitHeight, JsonElement::getAsInt); set(portrait, "xOffset", portraitXOffset, JsonElement::getAsInt); set(portrait, "yOffset", portraitYOffset, JsonElement::getAsInt); set(portrait, "scale", portraitScale, JsonElement::getAsDouble); setEnum(portrait, "anchor", portraitAnchor, Anchor.class); set(portrait, "xRatio", portraitXRatio, JsonElement::getAsDouble); set(portrait, "yRatio", portraitYRatio, JsonElement::getAsDouble); set(portrait, "followChat", portraitFollowChat, JsonElement::getAsBoolean); set(portrait, "alwaysVisible", portraitAlwaysVisible, JsonElement::getAsBoolean); set(portrait, "tint", portraitTint, JsonElement::getAsInt); set(portrait, "opacity", portraitOpacity, JsonElement::getAsInt); set(portrait, "brightness", portraitBrightness, JsonElement::getAsInt); set(portrait, "panelColor", portraitPanelColor, JsonElement::getAsInt); set(portrait, "panelAlpha", portraitPanelAlpha, JsonElement::getAsInt); set(portrait, "borderColor", portraitBorderColor, JsonElement::getAsInt); set(portrait, "borderThickness", portraitBorderThickness, JsonElement::getAsInt); set(portrait, "backdropEnabled", portraitBackdropEnabled, JsonElement::getAsBoolean); set(portrait, "backdropColor", portraitBackdropColor, JsonElement::getAsInt); set(portrait, "backdropAlpha", portraitBackdropAlpha, JsonElement::getAsInt); set(portrait, "backdropPadding", portraitBackdropPadding, JsonElement::getAsInt); set(portrait, "bustScale", portraitBustScale, JsonElement::getAsInt); set(portrait, "photoMode", portraitPhotoMode, JsonElement::getAsInt); set(portrait, "photoHeight", portraitPhotoHeight, JsonElement::getAsInt); set(portrait, "photoDivider", portraitPhotoDivider, JsonElement::getAsBoolean); set(portrait, "outerLayer", portraitOuterLayer, JsonElement::getAsBoolean); set(portrait, "filterEnabled", filterEnabled, JsonElement::getAsBoolean); set(portrait, "filterName", filterName, JsonElement::getAsString); set(portrait, "filterAlpha", filterAlpha, JsonElement::getAsInt); set(portrait, "filterBlend", filterBlend, JsonElement::getAsInt); set(portrait, "filterTint", filterTint, JsonElement::getAsInt); set(portrait, "filterBrightness", filterBrightness, JsonElement::getAsInt); set(portrait, "filterContrast", filterContrast, JsonElement::getAsInt); set(portrait, "filterSaturation", filterSaturation, JsonElement::getAsInt); set(portrait, "filterHue", filterHue, JsonElement::getAsInt); filterEffectColors.set(readStrings(portrait, "filterEffectColors")); set(portrait, "gradeEnabled", gradeEnabled, JsonElement::getAsBoolean); set(portrait, "gradeBrightness", gradeBrightness, JsonElement::getAsInt); set(portrait, "gradeContrast", gradeContrast, JsonElement::getAsInt); set(portrait, "gradeSaturation", gradeSaturation, JsonElement::getAsInt); set(portrait, "gradeHue", gradeHue, JsonElement::getAsInt); set(portrait, "duotoneEnabled", duotoneEnabled, JsonElement::getAsBoolean); set(portrait, "duotoneDark", duotoneDark, JsonElement::getAsInt); set(portrait, "duotoneLight", duotoneLight, JsonElement::getAsInt); set(portrait, "duotoneAmount", duotoneAmount, JsonElement::getAsInt); set(portrait, "cape", capeEnabled, JsonElement::getAsBoolean);
+        } set(chat, "centerXOffset", centerXOffset, JsonElement::getAsInt); set(chat, "topYOffset", topYOffset, JsonElement::getAsInt); set(chat, "maxLines", maxLines, JsonElement::getAsInt); set(chat, "boxWidth", boxWidth, JsonElement::getAsInt); set(chat, "backgroundAlpha", backgroundAlpha, JsonElement::getAsDouble); set(chat, "lineHoldSeconds", lineHoldSeconds, JsonElement::getAsDouble); set(chat, "holdMinSeconds", holdMinSeconds, JsonElement::getAsDouble); set(chat, "holdMaxSeconds", holdMaxSeconds, JsonElement::getAsDouble); set(chat, "backgroundColor", chatBackgroundColor, JsonElement::getAsInt); set(chat, "nameColor", chatNameColor, JsonElement::getAsInt); set(chat, "rightGap", chatRightGap, JsonElement::getAsInt); set(chat, "leftMargin", chatLeftMargin, JsonElement::getAsInt); set(chat, "nameMaxWidth", chatNameMaxWidth, JsonElement::getAsInt); set(chat, "paddingX", chatPaddingX, JsonElement::getAsInt); set(chat, "paddingY", chatPaddingY, JsonElement::getAsInt); set(chat, "symbolColor", chatSymbolColor, JsonElement::getAsInt); set(chat, "symbolPadding", chatSymbolPadding, JsonElement::getAsInt); set(chat, "borderEnabled", chatBorderEnabled, JsonElement::getAsBoolean); set(chat, "borderColor", chatBorderColor, JsonElement::getAsInt); set(chat, "borderThickness", chatBorderThickness, JsonElement::getAsInt);
+        set(portrait, "enabled", portraitEnabled, JsonElement::getAsBoolean); set(portrait, "chatHidden", portraitChatHidden, JsonElement::getAsBoolean); set(portrait, "width", portraitWidth, JsonElement::getAsInt); set(portrait, "height", portraitHeight, JsonElement::getAsInt); set(portrait, "xOffset", portraitXOffset, JsonElement::getAsInt); set(portrait, "yOffset", portraitYOffset, JsonElement::getAsInt); set(portrait, "scale", portraitScale, JsonElement::getAsDouble); setEnum(portrait, "anchor", portraitAnchor, Anchor.class); set(portrait, "xRatio", portraitXRatio, JsonElement::getAsDouble); set(portrait, "yRatio", portraitYRatio, JsonElement::getAsDouble); set(portrait, "followChat", portraitFollowChat, JsonElement::getAsBoolean); set(portrait, "alwaysVisible", portraitAlwaysVisible, JsonElement::getAsBoolean); set(portrait, "tint", portraitTint, JsonElement::getAsInt); set(portrait, "opacity", portraitOpacity, JsonElement::getAsInt); set(portrait, "brightness", portraitBrightness, JsonElement::getAsInt); set(portrait, "panelColor", portraitPanelColor, JsonElement::getAsInt); set(portrait, "panelAlpha", portraitPanelAlpha, JsonElement::getAsInt); set(portrait, "borderColor", portraitBorderColor, JsonElement::getAsInt); set(portrait, "borderThickness", portraitBorderThickness, JsonElement::getAsInt); set(portrait, "backdropEnabled", portraitBackdropEnabled, JsonElement::getAsBoolean); set(portrait, "backdropColor", portraitBackdropColor, JsonElement::getAsInt); set(portrait, "backdropAlpha", portraitBackdropAlpha, JsonElement::getAsInt); set(portrait, "backdropPadding", portraitBackdropPadding, JsonElement::getAsInt); set(portrait, "bustScale", portraitBustScale, JsonElement::getAsInt); set(portrait, "photoMode", portraitPhotoMode, JsonElement::getAsInt); set(portrait, "photoHeight", portraitPhotoHeight, JsonElement::getAsInt); set(portrait, "photoDivider", portraitPhotoDivider, JsonElement::getAsBoolean); set(portrait, "outerLayer", portraitOuterLayer, JsonElement::getAsBoolean); set(portrait, "filterEnabled", filterEnabled, JsonElement::getAsBoolean); set(portrait, "filterName", filterName, JsonElement::getAsString); set(portrait, "filterAlpha", filterAlpha, JsonElement::getAsInt); set(portrait, "filterBlend", filterBlend, JsonElement::getAsInt); set(portrait, "gradeEnabled", gradeEnabled, JsonElement::getAsBoolean); set(portrait, "gradeBrightness", gradeBrightness, JsonElement::getAsInt); set(portrait, "gradeContrast", gradeContrast, JsonElement::getAsInt); set(portrait, "gradeSaturation", gradeSaturation, JsonElement::getAsInt); set(portrait, "gradeHue", gradeHue, JsonElement::getAsInt); set(portrait, "duotoneEnabled", duotoneEnabled, JsonElement::getAsBoolean); set(portrait, "duotoneDark", duotoneDark, JsonElement::getAsInt); set(portrait, "duotoneLight", duotoneLight, JsonElement::getAsInt); set(portrait, "duotoneAmount", duotoneAmount, JsonElement::getAsInt); set(portrait, "cape", capeEnabled, JsonElement::getAsBoolean);
         set(root, "removeFromVanillaChat", removeFromVanillaChat, JsonElement::getAsBoolean); set(root, "vanillaPlayerChat", vanillaPlayerChat, JsonElement::getAsBoolean); set(root, "vanillaOtherMessages", vanillaOtherMessages, JsonElement::getAsBoolean); setEnum(root, "filterMode", filter, ChatFilter.class); set(root, "blipSound", blipEnabled, JsonElement::getAsBoolean); set(root, "soundVolume", soundVolume, JsonElement::getAsDouble); set(root, "goneSound", goneSoundEnabled, JsonElement::getAsBoolean); set(root, "newSoundPreset", newSoundPreset, JsonElement::getAsString); set(root, "newSoundVolume", newSoundVolume, JsonElement::getAsInt); set(root, "newSoundPitch", newSoundPitch, JsonElement::getAsInt); set(root, "newSoundFadeIn", newSoundFadeIn, JsonElement::getAsInt); set(root, "newSoundFadeOut", newSoundFadeOut, JsonElement::getAsInt); set(root, "newSoundSpeed", newSoundSpeed, JsonElement::getAsInt); set(root, "goneSoundPreset", goneSoundPreset, JsonElement::getAsString); set(root, "goneSoundVolume", goneSoundVolume, JsonElement::getAsInt); set(root, "goneSoundPitch", goneSoundPitch, JsonElement::getAsInt); set(root, "goneSoundFadeIn", goneSoundFadeIn, JsonElement::getAsInt); set(root, "goneSoundFadeOut", goneSoundFadeOut, JsonElement::getAsInt); set(root, "goneSoundSpeed", goneSoundSpeed, JsonElement::getAsInt); set(root, "portraitUseImage", portraitUseImage, JsonElement::getAsBoolean); set(root, "portraitImageName", portraitImageName, JsonElement::getAsString); set(root, "skinOffsetX", skinOffsetX, JsonElement::getAsInt); set(root, "skinOffsetY", skinOffsetY, JsonElement::getAsInt); set(root, "deathOverlay", deathOverlayEnabled, JsonElement::getAsBoolean); set(root, "chatVisibleLines", chatVisibleLines, JsonElement::getAsInt); set(root, "chatScreenLines", chatScreenLines, JsonElement::getAsInt); set(root, "previewDragTarget", previewDragTarget, JsonElement::getAsInt); set(root, "debugTiming", debugTiming, JsonElement::getAsBoolean); set(root, "activeCard", activeCard, JsonElement::getAsString); set(root, "autoCardByPlayer", autoCardByPlayer, JsonElement::getAsBoolean); set(root, "deathPreset", deathPreset, JsonElement::getAsString); set(root, "deathImageMaxSize", deathImageMaxSize, JsonElement::getAsInt); set(root, "deathImageScale", deathImageScale, JsonElement::getAsInt); set(root, "deathImageOffsetX", deathImageOffsetX, JsonElement::getAsInt); set(root, "deathImageOffsetY", deathImageOffsetY, JsonElement::getAsInt); set(root, "portraitImageScale", portraitImageScale, JsonElement::getAsInt); set(root, "portraitImageOffsetX", portraitImageOffsetX, JsonElement::getAsInt); set(root, "portraitImageOffsetY", portraitImageOffsetY, JsonElement::getAsInt);
         whitelist.set(readStrings(root, "filter")); customPortraits.set(readStrings(root, "customPortraits")); displayNames.set(readStrings(root, "displayNames")); customInfo.set(readStrings(root, "customInfo"));
         nameColors.clear(); filterTemplates.clear(); if (root.has("filterTemplates") && root.get("filterTemplates").isJsonArray()) for (JsonElement e : root.getAsJsonArray("filterTemplates")) try { filterTemplates.add(GSON.fromJson(e, FilterTemplate.class)); } catch (RuntimeException ignored) { } if (root.has("nameColors") && root.get("nameColors").isJsonArray()) for (JsonElement e : root.getAsJsonArray("nameColors")) try { nameColors.add(GSON.fromJson(e, NameColor.class)); } catch (RuntimeException ignored) { }
         textElements.clear(); if (root.has("textElements") && root.get("textElements").isJsonArray()) for (JsonElement e : root.getAsJsonArray("textElements")) try { TextElement item = GSON.fromJson(e, TextElement.class); if (item != null) textElements.add(item); } catch (RuntimeException ignored) { }
         if (textElements.isEmpty()) resetElements();
         set(root, "ncrCompat", ncrCompat, JsonElement::getAsBoolean);
-        // 卡里没写这个字段（旧卡）时回到“跟随全局”，避免沿用上一张卡的颜色
-        cardNameColor.set(root.has("cardNameColor") ? root.get("cardNameColor").getAsString() : "");
         migrateLegacyDefaults(root);
     }
 
@@ -1532,7 +1433,7 @@ public final class CommsConfig {
             }
         }
 
-        save(writeActiveCard);
+        save();
         return textElements.size();
     }
 
@@ -1686,64 +1587,7 @@ public final class CommsConfig {
         if (loaded) return; loaded = true;
         AceChatFolders.migrateLegacyIfNeeded();   // 老目录 config/acechat → ACE_config（只搬一次，留备份）
         AceChatFolders.ensure();
-        boolean corrupt = false;
-        loading = true;
-        try {
-            if (Files.exists(CONFIG_FILE)) {
-                apply(JsonParser.parseString(Files.readString(CONFIG_FILE, StandardCharsets.UTF_8)).getAsJsonObject());
-            } else {
-                loadLegacy();
-            }
-        } catch (Exception error) {
-            corrupt = true;
-            backupCorrupt(error);
-            resetElements();
-        } finally {
-            loading = false;
-        }
-        ensureBuiltInElements();
-        if (!corrupt && !Files.exists(CONFIG_FILE)) {
-            save();
-        }
-        selfTest();
-    }
-
-    /** 解析失败：先留一份原文件，绝不静默覆盖。 */
-    private static void backupCorrupt(Exception error) {
-        try {
-            if (Files.exists(CONFIG_FILE)) {
-                Path backup = CONFIG_FILE.resolveSibling("client.json.corrupt-"
-                        + java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
-                        .format(java.time.LocalDateTime.now()));
-                Files.copy(CONFIG_FILE, backup, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                LOGGER.warn("[acechat] client.json 解析失败，已备份为 {}（本次不写盘）", backup.getFileName(), error);
-            }
-        } catch (Exception copyError) {
-            LOGGER.error("[acechat] client.json 解析失败且备份失败", copyError);
-        }
-    }
-
-    /** 启动自检：至少保证关键字段真的进了 toJson，避免“UI 有、序列化漏”。 */
-    private static void selfTest() {
-        try {
-            JsonObject json = toJson();
-            JsonObject portrait = object(json, "portrait");
-            String[] required = {"filterTint", "filterBrightness", "filterContrast", "filterSaturation",
-                    "filterHue", "filterEffectColors"};
-            List<String> missing = new ArrayList<>();
-            for (String key : required) {
-                if (!portrait.has(key)) {
-                    missing.add(key);
-                }
-            }
-            if (missing.isEmpty()) {
-                LOGGER.info("[acechat] selftest config-keys PASS");
-            } else {
-                LOGGER.warn("[acechat] selftest config-keys FAIL missing={}", missing);
-            }
-        } catch (RuntimeException error) {
-            LOGGER.warn("[acechat] selftest config-keys ERROR", error);
-        }
+        try { if (Files.exists(CONFIG_FILE)) apply(JsonParser.parseString(Files.readString(CONFIG_FILE, StandardCharsets.UTF_8)).getAsJsonObject()); else { loadLegacy(); save(); } } catch (Exception ignored) { resetElements(); save(); } ensureBuiltInElements();
     }
 
     private static void loadLegacy() {
@@ -1769,9 +1613,9 @@ public final class CommsConfig {
      * 这个留着做两件事：默认卡文件缺失时的兜底、以及生成 {@code _default.json}。
      */
     public static void saveAndResetDefaults() { resetAll(); resetElementsSafe(); save(); }
-    private static void resetAll() { hudEnabled.reset(); centerXOffset.reset(); topYOffset.reset(); maxLines.reset(); boxWidth.reset(); backgroundAlpha.reset(); lineHoldSeconds.reset(); holdMinSeconds.reset(); holdMaxSeconds.reset(); chatBackgroundColor.reset(); chatNameColor.reset(); chatRightGap.reset(); chatLeftMargin.reset(); chatNameMaxWidth.reset(); chatSymbolPadding.reset(); chatSymbolColor.reset(); chatPaddingX.reset(); chatPaddingY.reset(); chatBorderEnabled.reset(); chatBorderColor.reset(); chatBorderThickness.reset(); chatTextEffect.reset(); chatTextOutlineColor.reset(); filter.reset(); removeFromVanillaChat.reset(); vanillaPlayerChat.reset(); vanillaOtherMessages.reset(); includeActions.reset(); whitelist.reset(); chatVisibleLines.reset(); chatScreenLines.reset(); portraitEnabled.reset(); portraitChatHidden.reset(); portraitWidth.reset(); portraitHeight.reset(); portraitXOffset.reset(); portraitYOffset.reset(); portraitScale.reset(); portraitAnchor.reset(); previewDragTarget.reset(); portraitXRatio.reset(); portraitYRatio.reset(); portraitFollowChat.reset(); portraitAlwaysVisible.reset(); portraitTint.reset(); portraitOpacity.reset(); portraitBrightness.reset(); portraitPanelColor.reset(); portraitPanelAlpha.reset(); portraitBorderColor.reset(); portraitBorderThickness.reset(); portraitBackdropEnabled.reset(); portraitBackdropColor.reset(); portraitBackdropAlpha.reset(); portraitBackdropPadding.reset(); portraitBustScale.reset(); skinOffsetX.reset(); skinOffsetY.reset(); portraitPhotoMode.reset(); portraitPhotoHeight.reset(); portraitPhotoDivider.reset(); portraitOuterLayer.reset(); capeEnabled.reset(); customPortraitEnabled.reset(); customPortraits.reset(); displayNames.reset(); customInfo.reset(); blipEnabled.reset(); goneSoundEnabled.reset(); soundVolume.reset(); newSoundPreset.reset(); newSoundVolume.reset(); newSoundPitch.reset(); newSoundSpeed.reset(); newSoundFadeIn.reset(); newSoundFadeOut.reset(); goneSoundPreset.reset(); goneSoundVolume.reset(); goneSoundPitch.reset(); goneSoundSpeed.reset(); goneSoundFadeIn.reset(); goneSoundFadeOut.reset(); portraitUseImage.reset(); portraitImageName.reset(); portraitImageScale.reset();
+    private static void resetAll() { hudEnabled.reset(); centerXOffset.reset(); topYOffset.reset(); maxLines.reset(); boxWidth.reset(); backgroundAlpha.reset(); lineHoldSeconds.reset(); holdMinSeconds.reset(); holdMaxSeconds.reset(); chatBackgroundColor.reset(); chatNameColor.reset(); chatRightGap.reset(); chatLeftMargin.reset(); chatNameMaxWidth.reset(); chatSymbolPadding.reset(); chatSymbolColor.reset(); chatPaddingX.reset(); chatPaddingY.reset(); chatBorderEnabled.reset(); chatBorderColor.reset(); chatBorderThickness.reset(); filter.reset(); removeFromVanillaChat.reset(); vanillaPlayerChat.reset(); vanillaOtherMessages.reset(); includeActions.reset(); whitelist.reset(); chatVisibleLines.reset(); chatScreenLines.reset(); portraitEnabled.reset(); portraitChatHidden.reset(); portraitWidth.reset(); portraitHeight.reset(); portraitXOffset.reset(); portraitYOffset.reset(); portraitScale.reset(); portraitAnchor.reset(); previewDragTarget.reset(); portraitXRatio.reset(); portraitYRatio.reset(); portraitFollowChat.reset(); portraitAlwaysVisible.reset(); portraitTint.reset(); portraitOpacity.reset(); portraitBrightness.reset(); portraitPanelColor.reset(); portraitPanelAlpha.reset(); portraitBorderColor.reset(); portraitBorderThickness.reset(); portraitBackdropEnabled.reset(); portraitBackdropColor.reset(); portraitBackdropAlpha.reset(); portraitBackdropPadding.reset(); portraitBustScale.reset(); skinOffsetX.reset(); skinOffsetY.reset(); portraitPhotoMode.reset(); portraitPhotoHeight.reset(); portraitPhotoDivider.reset(); portraitOuterLayer.reset(); capeEnabled.reset(); customPortraitEnabled.reset(); customPortraits.reset(); displayNames.reset(); customInfo.reset(); blipEnabled.reset(); goneSoundEnabled.reset(); soundVolume.reset(); newSoundPreset.reset(); newSoundVolume.reset(); newSoundPitch.reset(); newSoundSpeed.reset(); newSoundFadeIn.reset(); newSoundFadeOut.reset(); goneSoundPreset.reset(); goneSoundVolume.reset(); goneSoundPitch.reset(); goneSoundSpeed.reset(); goneSoundFadeIn.reset(); goneSoundFadeOut.reset(); portraitUseImage.reset(); portraitImageName.reset(); portraitImageScale.reset();
                 deathOverlayEnabled.reset(); deathPreset.reset(); deathImageMaxSize.reset();
-                deathImageScale.reset(); deathImageOffsetX.reset(); deathImageOffsetY.reset(); portraitImageOffsetX.reset(); portraitImageOffsetY.reset(); nameColors.clear(); filterTemplates.clear(); cardNameColor.reset();
+                deathImageScale.reset(); deathImageOffsetX.reset(); deathImageOffsetY.reset(); portraitImageOffsetX.reset(); portraitImageOffsetY.reset(); nameColors.clear(); filterTemplates.clear();
         // 滤镜模板区块（之前漏了：主界面「恢复默认」不会重置这些）
         filterEnabled.reset(); filterName.reset(); filterAlpha.reset(); filterBlend.reset();
                 filterTint.reset(); filterBrightness.reset(); filterContrast.reset();

@@ -204,10 +204,6 @@ private boolean waitingHotkey = false;
    @Override
    protected void init() {
       CommsConfig.setEditingScreen(true);
-      // 旧界面也强制回到“正在编辑的卡”，避免沿用渲染期临时套用的说话人卡
-      if (!CommsConfig.currentCard().equals(CommsConfig.appliedCardName())) {
-         CommsConfig.applyCardForEditing(CommsConfig.currentCard());
-      }
       this.clearWidgets();
       this.fields.clear();
       this.readers.clear();
@@ -1952,7 +1948,7 @@ private void rebuildRowsOnly() {
       this.rowSliderInt("config.acechat.chat.left_margin", 0, 240, true, " px", false, CommsConfig.chatLeftMargin);
       this.rowSliderInt("config.acechat.chat.name_max_width", 20, 400, true, " px", false, CommsConfig.chatNameMaxWidth);
       this.rowSliderInt("config.acechat.chat.symbol_padding", 0, 16, true, " px", false, CommsConfig.chatSymbolPadding);
-      // 符号颜色已取消单独设置：跟随名字颜色（见 CommsConfig.chatLine / CommsHud.buildLines）
+      this.rowColor("config.acechat.chat.symbol_color", CommsConfig.chatSymbolColor);
       this.rowSliderInt("config.acechat.chat.padding_x", 0, 8, true, "", false, CommsConfig.chatPaddingX);
       this.rowSliderInt("config.acechat.chat.padding_y", 0, 8, true, "", false, CommsConfig.chatPaddingY);
       this.rowToggle("config.acechat.chat.border", CommsConfig.chatBorderEnabled);

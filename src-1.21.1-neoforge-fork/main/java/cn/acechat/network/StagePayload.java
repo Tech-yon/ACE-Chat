@@ -66,22 +66,6 @@ public record StagePayload(String json) implements CustomPacketPayload {
             offset += groupEnd;
         }
         root.add("lines", lines);
-        return build(root, lines);
-    }
-
-    /** 单包 JSON 的 UTF-8 上限（1.21.1 ByteBufCodecs.STRING_UTF8 是 32767，这里留余量）。 */
-    private static StagePayload build(JsonObject root, JsonArray lines) {
-        boolean truncated = false;
-        while (lines.size() > 0
-                && root.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 30000) {
-            lines.remove(lines.size() - 1);
-            truncated = true;
-        }
-        if (truncated) {
-            root.addProperty("truncated", true);
-            org.slf4j.LoggerFactory.getLogger("acechat")
-                    .warn("[acechat] 演出台词超过单包上限，已截断到 {} 句", lines.size());
-        }
         return new StagePayload(root.toString());
     }
 
@@ -112,6 +96,6 @@ public record StagePayload(String json) implements CustomPacketPayload {
             total++;
         }
         root.add("lines", lines);
-        return build(root, lines);
+        return new StagePayload(root.toString());
     }
 }

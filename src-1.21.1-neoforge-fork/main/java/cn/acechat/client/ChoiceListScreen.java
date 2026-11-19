@@ -41,7 +41,6 @@ public class ChoiceListScreen extends Screen {
     }
 
     private void build() {
-        this.clearWidgets();   // 滚轮重建时先清旧按钮，避免一组组叠加
         int maxScroll = Math.max(0, this.items.size() - visibleRows());
         this.scroll = Math.max(0, Math.min(this.scroll, maxScroll));
         int x = this.width / 2 - 140;
@@ -64,11 +63,6 @@ public class ChoiceListScreen extends Screen {
         this.scroll -= (int) Math.signum(scrollY) * 2;
         build();
         return true;
-    }
-
-    @Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 不调用原版模糊：1.21 的 blur 会把列表文字一起糊掉
     }
 
     @Override
